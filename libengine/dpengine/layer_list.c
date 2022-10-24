@@ -364,7 +364,7 @@ void DP_layer_list_merge_to_flat_image(DP_LayerList *ll, DP_LayerPropsList *lpl,
                 int blend_mode = DP_layer_props_blend_mode(lp);
                 if (include_sublayers) {
                     DP_LayerContent *sub_lc =
-                        DP_layer_content_merge_to_flat_image(lc);
+                        DP_layer_content_merge_sublayers(lc);
                     DP_transient_layer_content_merge(tlc, 0, sub_lc, opacity,
                                                      blend_mode);
                     DP_layer_content_decref(sub_lc);
@@ -604,6 +604,15 @@ void DP_transient_layer_list_set_content_noinc(DP_TransientLayerList *tll,
     DP_ASSERT(lc);
     set_element_at(tll, index, (DP_LayerListEntry){false, {.content = lc}});
 }
+
+void DP_transient_layer_list_set_content_inc(DP_TransientLayerList *tll,
+                                             DP_LayerContent *lc, int index)
+{
+    DP_ASSERT(lc);
+    DP_transient_layer_list_set_content_noinc(tll, DP_layer_content_incref(lc),
+                                              index);
+}
+
 
 void DP_transient_layer_list_set_group_noinc(DP_TransientLayerList *tll,
                                              DP_LayerGroup *lg, int index)

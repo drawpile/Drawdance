@@ -239,7 +239,7 @@ const char *DP_layer_props_title(DP_LayerProps *lp, size_t *out_length)
         length = lt->length;
     }
     else {
-        title = NULL;
+        title = "";
         length = 0;
     }
 

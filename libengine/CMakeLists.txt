@@ -22,6 +22,9 @@ set(dpengine_sources
     dpengine/affected_area.c
     dpengine/annotation.c
     dpengine/annotation_list.c
+    dpengine/brush.c
+    dpengine/brush_engine.c
+    # dpengine/brush_preview.c
     dpengine/canvas_diff.c
     dpengine/canvas_history.c
     dpengine/canvas_state.c
@@ -37,11 +40,14 @@ set(dpengine_sources
     dpengine/layer_list.c
     dpengine/layer_props.c
     dpengine/layer_props_list.c
-    dpengine/layer_search.c
+    dpengine/layer_routes.c
     dpengine/model_changes.c
     dpengine/ops.c
     dpengine/paint.c
+    dpengine/paint_engine.c
     dpengine/pixels.c
+    dpengine/save.c
+    dpengine/snapshots.c
     dpengine/tile.c
     dpengine/timeline.c)
 
@@ -49,6 +55,9 @@ set(dpengine_headers
     dpengine/affected_area.h
     dpengine/annotation.h
     dpengine/annotation_list.h
+    dpengine/brush.h
+    dpengine/brush_engine.h
+    dpengine/brush_preview.h
     dpengine/canvas_diff.h
     dpengine/canvas_history.h
     dpengine/canvas_state.h
@@ -64,11 +73,14 @@ set(dpengine_headers
     dpengine/layer_list.h
     dpengine/layer_props.h
     dpengine/layer_props_list.h
-    dpengine/layer_search.h
+    dpengine/layer_routes.h
     dpengine/model_changes.c
     dpengine/ops.h
     dpengine/paint.h
+    dpengine/paint_engine.h
     dpengine/pixels.h
+    dpengine/save.h
+    dpengine/snapshots.h
     dpengine/tile.h
     dpengine/timeline.h)
 
@@ -97,7 +109,14 @@ add_library(dpengine STATIC "${dpengine_sources}" "${dpengine_headers}")
 set_dp_target_properties(dpengine)
 target_include_directories(dpengine INTERFACE "${CMAKE_CURRENT_LIST_DIR}")
 target_link_libraries(dpengine PUBLIC
-                      dpmsg_interface mypaint PNG::PNG qgrayraster)
+                      dpmsg_interface uthash mypaint PNG::PNG qgrayraster)
+
+if(libzip_FOUND)
+    target_compile_definitions(dpengine PUBLIC DRAWDANCE_OPENRASTER)
+    target_link_libraries(dpengine PUBLIC libzip::zip)
+else()
+    message(WARNING "LibZip not found, compiling without OpenRaster support")
+endif()
 
 if(BUILD_TESTS)
     add_library(dptest_engine STATIC "${dptest_engine_sources}"

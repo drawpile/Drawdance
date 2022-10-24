@@ -99,7 +99,7 @@ struct DP_TileInflateArgs {
     DP_TransientTile *tt;
 };
 
-static unsigned char *get_output_buffer(size_t out_size, void *user)
+static unsigned char *get_inflate_output_buffer(size_t out_size, void *user)
 {
     if (out_size == DP_TILE_COMPRESSED_BYTES) {
         struct DP_TileInflateArgs *args = user;
@@ -128,7 +128,8 @@ DP_Tile *DP_tile_new_from_compressed(DP_DrawContext *dc,
             context_id,
             NULL,
         };
-        if (DP_compress_inflate(image, image_size, get_output_buffer, &args)
+        if (DP_compress_inflate(image, image_size, get_inflate_output_buffer,
+                                &args)
             && DP_pixels8_to_15_checked(args.tt->pixels, args.buffer,
                                         DP_TILE_LENGTH)) {
             return (DP_Tile *)args.tt;
@@ -138,6 +139,22 @@ DP_Tile *DP_tile_new_from_compressed(DP_DrawContext *dc,
             return NULL;
         }
     }
+}
+
+DP_Tile *DP_tile_new_checker(unsigned int context_id, DP_Pixel15 pixel1,
+                             DP_Pixel15 pixel2)
+{
+    DP_TransientTile *tt = alloc_tile(true, context_id);
+    int half = DP_TILE_SIZE / 2;
+    for (int y = 0; y < half; ++y) {
+        for (int x = 0; x < half; ++x) {
+            DP_transient_tile_pixel_at_set(tt, x, y, pixel1);
+            DP_transient_tile_pixel_at_set(tt, x + half, y, pixel2);
+            DP_transient_tile_pixel_at_set(tt, x, y + half, pixel2);
+            DP_transient_tile_pixel_at_set(tt, x + half, y + half, pixel1);
+        }
+    }
+    return DP_transient_tile_persist(tt);
 }
 
 
@@ -257,6 +274,20 @@ bool DP_tile_same_pixel(DP_Tile *tile_or_null, DP_Pixel15 *out_pixel)
         *out_pixel = pixel;
     }
     return true;
+}
+
+
+size_t DP_tile_compress(DP_Tile *tile, DP_Pixel8 *pixel_buffer,
+                        unsigned char *(*get_output_buffer)(size_t, void *),
+                        void *user)
+{
+    DP_ASSERT(tile);
+    DP_ASSERT(DP_atomic_get(&tile->refcount) > 0);
+    DP_ASSERT(pixel_buffer);
+    DP_pixels15_to_8(pixel_buffer, tile->pixels, DP_TILE_LENGTH);
+    return DP_compress_deflate((const unsigned char *)pixel_buffer,
+                               DP_TILE_COMPRESSED_BYTES, get_output_buffer,
+                               user);
 }
 
 

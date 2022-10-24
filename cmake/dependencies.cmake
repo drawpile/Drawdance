@@ -60,5 +60,7 @@ else()
 
     find_package(CURL MODULE REQUIRED COMPONENTS HTTPS HTTP SSL)
 
+    find_package(libzip)
+
     find_package(Qt5 COMPONENTS Core Gui)
 endif()
