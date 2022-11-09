@@ -83,7 +83,8 @@ bool DP_binary_writer_write_header(DP_BinaryWriter *writer, JSON_Object *header)
     size_t length = size - 1; // Without the null terminator.
     size_t max_length = (size_t)UINT16_MAX;
     if (length > max_length) {
-        DP_error_set("Binary metadata too long: %zu > %zu", length, max_length);
+        DP_error_set("Binary metadata too long: %" DP_PZU " > %" DP_PZU,
+                     DP_PSZ(length), DP_PSZ(max_length));
         return false;
     }
 

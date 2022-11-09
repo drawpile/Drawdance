@@ -126,8 +126,9 @@ static size_t file_output_write(void *internal, const void *buffer, size_t size)
     DP_FileOutputState *state = internal;
     size_t written = fwrite(buffer, 1, size, state->fp);
     if (written != size) {
-        DP_error_set("File output wrote %zu instead of expected %zu bytes: %s",
-                     size, written, strerror(errno));
+        DP_error_set("File output wrote %" DP_PZU
+                     " instead of expected %" DP_PZU " bytes: %s",
+                     DP_PSZ(size), DP_PSZ(written), strerror(errno));
     }
     return written;
 }

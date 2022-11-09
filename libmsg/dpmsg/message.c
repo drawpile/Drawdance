@@ -205,7 +205,8 @@ size_t DP_message_serialize(DP_Message *msg, bool write_body_length,
 
     size_t length = msg->methods->payload_length(msg);
     if (length > UINT16_MAX) {
-        DP_error_set("Message body length out of bounds: %zu", length);
+        DP_error_set("Message body length out of bounds: %" DP_PZU,
+                     DP_PSZ(length));
         return 0;
     }
 
@@ -256,8 +257,9 @@ DP_Message *DP_message_deserialize_length(const unsigned char *buf,
                                            body_length);
     }
     else {
-        DP_error_set("Buffer size %zu shorter than message length %zu", bufsize,
-                     total_length);
+        DP_error_set("Buffer size %" DP_PZU
+                     " shorter than message length %" DP_PZU,
+                     DP_PSZ(bufsize), DP_PSZ(total_length));
         return NULL;
     }
 }
@@ -270,7 +272,8 @@ DP_Message *DP_message_deserialize(const unsigned char *buf, size_t bufsize)
         return DP_message_deserialize_length(buf + 2, bufsize - 2, body_length);
     }
     else {
-        DP_error_set("Buffer size %zu too short for message header", bufsize);
+        DP_error_set("Buffer size %" DP_PZU " too short for message header",
+                     DP_PSZ(bufsize));
         return NULL;
     }
 }

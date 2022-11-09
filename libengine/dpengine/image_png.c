@@ -68,7 +68,8 @@ static void read_png(png_structp png_ptr, png_bytep data, size_t length)
         png_longjmp(png_ptr, 1);
     }
     else if (read != length) {
-        DP_error_set("PNG wanted %zu bytes, but got %zu", length, read);
+        DP_error_set("PNG wanted %" DP_PZU " bytes, but got %" DP_PZU,
+                     DP_PSZ(length), DP_PSZ(read));
         png_longjmp(png_ptr, 1);
     }
 }
@@ -126,8 +127,8 @@ DP_Image *DP_image_png_read(DP_Input *input)
     size_t rowbytes = png_get_rowbytes(png_ptr, info_ptr);
     size_t expected_rowbytes = width * 4u;
     if (rowbytes != expected_rowbytes) {
-        DP_error_set("Expected PNG row length of %zu, but got %zu",
-                     expected_rowbytes, rowbytes);
+        DP_error_set("Expected PNG row length of %" DP_PZU ", but got %" DP_PZU,
+                     DP_PSZ(expected_rowbytes), DP_PSZ(rowbytes));
         png_longjmp(png_ptr, 1);
     }
 

@@ -55,7 +55,7 @@ char *DP_ext_auth(const char *url, const char *body, long timeout_seconds)
     char *buffer;
     if (fetch->data) {
         size_t length = (size_t)fetch->numBytes;
-        DP_debug("Fetched %zu bytes", length);
+        DP_debug("Fetched \%" DP_PZU " bytes", length);
         buffer = DP_malloc(length + 1);
         memcpy(buffer, fetch->data, length);
         buffer[length] = '\0';

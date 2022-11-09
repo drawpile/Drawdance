@@ -51,8 +51,8 @@ static bool read_magic(DP_Input *input)
         return false;
     }
     else if (read != DP_DPREC_MAGIC_LENGTH) {
-        DP_error_set("Invalid recording header prefix size: %zu != %d", read,
-                     DP_DPREC_MAGIC_LENGTH);
+        DP_error_set("Invalid recording header prefix size: %" DP_PZU " != %d",
+                     DP_PSZ(read), DP_DPREC_MAGIC_LENGTH);
         return false;
     }
     else if (memcmp(buffer, DP_DPREC_MAGIC, DP_DPREC_MAGIC_LENGTH) != 0) {
@@ -73,7 +73,8 @@ static size_t read_metadata_length(DP_Input *input)
         return 0;
     }
     else if (read != 2) {
-        DP_error_set("Invalid recording metadata length size: %zu != 2", read);
+        DP_error_set("Invalid recording metadata length size: %" DP_PZU " != 2",
+                     DP_PSZ(read));
         return 0;
     }
 
@@ -96,8 +97,9 @@ static char *read_metadata(DP_Input *input, size_t length)
         return NULL;
     }
     else if (read != length) {
-        DP_error_set("Got only %zu bytes of %zu of recording metadata", read,
-                     length);
+        DP_error_set("Got only %" DP_PZU " bytes of %" DP_PZU
+                     " of recording metadata",
+                     DP_PSZ(read), DP_PSZ(length));
         DP_free(buffer);
         return NULL;
     }
@@ -202,8 +204,8 @@ static bool read_message_length(DP_BinaryReader *reader)
         return false;
     }
     else if (read != 0 && read < DP_MESSAGE_HEADER_LENGTH) {
-        DP_error_set("Expected message length of %d bytes, but got %zu",
-                     DP_MESSAGE_HEADER_LENGTH, read);
+        DP_error_set("Expected message length of %d bytes, but got %" DP_PZU,
+                     DP_MESSAGE_HEADER_LENGTH, DP_PSZ(read));
     }
 
     return read == DP_MESSAGE_HEADER_LENGTH;
@@ -219,8 +221,9 @@ static bool read_message_body(DP_BinaryReader *reader, size_t body_length)
         return false;
     }
     else if (read != body_length) {
-        DP_error_set("Expected message body of %zu bytes, but got %zu",
-                     body_length, read);
+        DP_error_set("Expected message body of %" DP_PZU
+                     " bytes, but got %" DP_PZU,
+                     DP_PSZ(body_length), DP_PSZ(read));
         return false;
     }
     else {

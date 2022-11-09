@@ -18,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.10)
 
 project(drawdance
     VERSION 0.3.0
@@ -119,9 +119,9 @@ add_subdirectory(3rdparty)
 add_subdirectory(generators)
 add_subdirectory(libcommon)
 add_subdirectory(libmsg)
-add_subdirectory(libclient)
 add_subdirectory(libengine)
 if(BUILD_APPS)
+    add_subdirectory(libclient)
     add_subdirectory(appconv)
     add_subdirectory(appdrawdance)
 endif()

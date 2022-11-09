@@ -647,8 +647,8 @@ DP_Message *DP_msg_server_command_deserialize(unsigned int context_id,
 {
     if (length > 65535) {
         DP_error_set("Wrong length for servercommand message; "
-                     "expected between 0 and 65535, got %zu",
-                     length);
+                     "expected between 0 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -690,7 +690,7 @@ struct DP_MsgDisconnect {
 static size_t msg_disconnect_payload_length(DP_Message *msg)
 {
     DP_MsgDisconnect *md = DP_message_internal(msg);
-    return 1 + DP_uint16_to_size(md->message_len);
+    return ((size_t)1) + DP_uint16_to_size(md->message_len);
 }
 
 static size_t msg_disconnect_serialize_payload(DP_Message *msg,
@@ -747,8 +747,8 @@ DP_Message *DP_msg_disconnect_deserialize(unsigned int context_id,
 {
     if (length < 1 || length > 65535) {
         DP_error_set("Wrong length for disconnect message; "
-                     "expected between 1 and 65535, got %zu",
-                     length);
+                     "expected between 1 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -794,7 +794,7 @@ struct DP_MsgPing {
 
 static size_t msg_ping_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 1;
+    return ((size_t)1);
 }
 
 static size_t msg_ping_serialize_payload(DP_Message *msg, unsigned char *data)
@@ -841,8 +841,8 @@ DP_Message *DP_msg_ping_deserialize(unsigned int context_id,
 {
     if (length != 1) {
         DP_error_set("Wrong length for ping message; "
-                     "expected 1, got %zu",
-                     length);
+                     "expected 1, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -888,7 +888,7 @@ struct DP_MsgJoin {
 static size_t msg_join_payload_length(DP_Message *msg)
 {
     DP_MsgJoin *mj = DP_message_internal(msg);
-    return 2 + DP_uint16_to_size(mj->name_len) + mj->avatar_size;
+    return ((size_t)2) + DP_uint16_to_size(mj->name_len) + mj->avatar_size;
 }
 
 static size_t msg_join_serialize_payload(DP_Message *msg, unsigned char *data)
@@ -961,8 +961,8 @@ DP_Message *DP_msg_join_deserialize(unsigned int context_id,
 {
     if (length < 2 || length > 65535) {
         DP_error_set("Wrong length for join message; "
-                     "expected between 2 and 65535, got %zu",
-                     length);
+                     "expected between 2 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -970,8 +970,8 @@ DP_Message *DP_msg_join_deserialize(unsigned int context_id,
     size_t name_bytes = read_uint8(buffer + read, &read);
     if (read + name_bytes > length) {
         DP_error_set("Wrong length for name field in join message; "
-                     "field length %zu exceeds total length %zu",
-                     name_bytes, length);
+                     "field length %" DP_PZU " exceeds total length %" DP_PZU,
+                     DP_PSZ(name_bytes), DP_PSZ(length));
         return NULL;
     }
     uint16_t name_len = DP_size_to_uint16(name_bytes);
@@ -1036,8 +1036,8 @@ DP_Message *DP_msg_leave_deserialize(unsigned int context_id,
 {
     if (length != 0) {
         DP_error_set("Wrong length for leave message; "
-                     "expected 0, got %zu",
-                     length);
+                     "expected 0, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     return DP_msg_leave_new(context_id);
@@ -1113,8 +1113,8 @@ DP_Message *DP_msg_session_owner_deserialize(unsigned int context_id,
 {
     if (length > 255) {
         DP_error_set("Wrong length for sessionowner message; "
-                     "expected between 0 and 255, got %zu",
-                     length);
+                     "expected between 0 and 255, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -1184,7 +1184,7 @@ struct DP_MsgChat {
 static size_t msg_chat_payload_length(DP_Message *msg)
 {
     DP_MsgChat *mc = DP_message_internal(msg);
-    return 2 + DP_uint16_to_size(mc->message_len);
+    return ((size_t)2) + DP_uint16_to_size(mc->message_len);
 }
 
 static size_t msg_chat_serialize_payload(DP_Message *msg, unsigned char *data)
@@ -1243,8 +1243,8 @@ DP_Message *DP_msg_chat_deserialize(unsigned int context_id,
 {
     if (length < 2 || length > 65535) {
         DP_error_set("Wrong length for chat message; "
-                     "expected between 2 and 65535, got %zu",
-                     length);
+                     "expected between 2 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -1357,8 +1357,8 @@ DP_Message *DP_msg_trusted_users_deserialize(unsigned int context_id,
 {
     if (length > 255) {
         DP_error_set("Wrong length for trusted message; "
-                     "expected between 0 and 255, got %zu",
-                     length);
+                     "expected between 0 and 255, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -1404,8 +1404,8 @@ DP_Message *DP_msg_soft_reset_deserialize(unsigned int context_id,
 {
     if (length != 0) {
         DP_error_set("Wrong length for softreset message; "
-                     "expected 0, got %zu",
-                     length);
+                     "expected 0, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     return DP_msg_soft_reset_new(context_id);
@@ -1424,7 +1424,7 @@ struct DP_MsgPrivateChat {
 static size_t msg_private_chat_payload_length(DP_Message *msg)
 {
     DP_MsgPrivateChat *mpc = DP_message_internal(msg);
-    return 2 + DP_uint16_to_size(mpc->message_len);
+    return ((size_t)2) + DP_uint16_to_size(mpc->message_len);
 }
 
 static size_t msg_private_chat_serialize_payload(DP_Message *msg,
@@ -1487,8 +1487,8 @@ DP_Message *DP_msg_private_chat_deserialize(unsigned int context_id,
 {
     if (length < 2 || length > 65535) {
         DP_error_set("Wrong length for privatechat message; "
-                     "expected between 2 and 65535, got %zu",
-                     length);
+                     "expected between 2 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -1542,7 +1542,7 @@ struct DP_MsgInterval {
 
 static size_t msg_interval_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 2;
+    return ((size_t)2);
 }
 
 static size_t msg_interval_serialize_payload(DP_Message *msg,
@@ -1593,8 +1593,8 @@ DP_Message *DP_msg_interval_deserialize(unsigned int context_id,
 {
     if (length != 2) {
         DP_error_set("Wrong length for interval message; "
-                     "expected 2, got %zu",
-                     length);
+                     "expected 2, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -1623,7 +1623,7 @@ struct DP_MsgLaserTrail {
 
 static size_t msg_laser_trail_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 5;
+    return ((size_t)5);
 }
 
 static size_t msg_laser_trail_serialize_payload(DP_Message *msg,
@@ -1678,8 +1678,8 @@ DP_Message *DP_msg_laser_trail_deserialize(unsigned int context_id,
 {
     if (length != 5) {
         DP_error_set("Wrong length for lasertrail message; "
-                     "expected 5, got %zu",
-                     length);
+                     "expected 5, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -1715,7 +1715,7 @@ struct DP_MsgMovePointer {
 
 static size_t msg_move_pointer_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 8;
+    return ((size_t)8);
 }
 
 static size_t msg_move_pointer_serialize_payload(DP_Message *msg,
@@ -1770,8 +1770,8 @@ DP_Message *DP_msg_move_pointer_deserialize(unsigned int context_id,
 {
     if (length != 8) {
         DP_error_set("Wrong length for movepointer message; "
-                     "expected 8, got %zu",
-                     length);
+                     "expected 8, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -1860,8 +1860,8 @@ DP_Message *DP_msg_marker_deserialize(unsigned int context_id,
 {
     if (length > 65535) {
         DP_error_set("Wrong length for marker message; "
-                     "expected between 0 and 65535, got %zu",
-                     length);
+                     "expected between 0 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -1960,8 +1960,8 @@ DP_Message *DP_msg_user_acl_deserialize(unsigned int context_id,
 {
     if (length > 255) {
         DP_error_set("Wrong length for useracl message; "
-                     "expected between 0 and 255, got %zu",
-                     length);
+                     "expected between 0 and 255, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2004,7 +2004,7 @@ struct DP_MsgLayerAcl {
 static size_t msg_layer_acl_payload_length(DP_Message *msg)
 {
     DP_MsgLayerAcl *mla = DP_message_internal(msg);
-    return 3 + DP_int_to_size(mla->exclusive_count);
+    return ((size_t)3) + DP_int_to_size(mla->exclusive_count);
 }
 
 static size_t msg_layer_acl_serialize_payload(DP_Message *msg,
@@ -2073,8 +2073,8 @@ DP_Message *DP_msg_layer_acl_deserialize(unsigned int context_id,
 {
     if (length < 3 || length > 258) {
         DP_error_set("Wrong length for layeracl message; "
-                     "expected between 3 and 258, got %zu",
-                     length);
+                     "expected between 3 and 258, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2193,8 +2193,8 @@ DP_Message *DP_msg_feature_access_levels_deserialize(
 {
     if (length != 11) {
         DP_error_set("Wrong length for featureaccess message; "
-                     "expected 11, got %zu",
-                     length);
+                     "expected 11, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2235,7 +2235,7 @@ struct DP_MsgDefaultLayer {
 
 static size_t msg_default_layer_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 2;
+    return ((size_t)2);
 }
 
 static size_t msg_default_layer_serialize_payload(DP_Message *msg,
@@ -2286,8 +2286,8 @@ DP_Message *DP_msg_default_layer_deserialize(unsigned int context_id,
 {
     if (length != 2) {
         DP_error_set("Wrong length for defaultlayer message; "
-                     "expected 2, got %zu",
-                     length);
+                     "expected 2, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2376,8 +2376,8 @@ DP_Message *DP_msg_filtered_deserialize(unsigned int context_id,
 {
     if (length > 65535) {
         DP_error_set("Wrong length for filtered message; "
-                     "expected between 0 and 65535, got %zu",
-                     length);
+                     "expected between 0 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2423,8 +2423,8 @@ DP_Message *DP_msg_undo_point_deserialize(unsigned int context_id,
 {
     if (length != 0) {
         DP_error_set("Wrong length for undopoint message; "
-                     "expected 0, got %zu",
-                     length);
+                     "expected 0, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     return DP_msg_undo_point_new(context_id);
@@ -2442,7 +2442,7 @@ struct DP_MsgCanvasResize {
 
 static size_t msg_canvas_resize_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 16;
+    return ((size_t)16);
 }
 
 static size_t msg_canvas_resize_serialize_payload(DP_Message *msg,
@@ -2505,8 +2505,8 @@ DP_Message *DP_msg_canvas_resize_deserialize(unsigned int context_id,
 {
     if (length != 16) {
         DP_error_set("Wrong length for resize message; "
-                     "expected 16, got %zu",
-                     length);
+                     "expected 16, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2574,7 +2574,7 @@ struct DP_MsgLayerCreate {
 static size_t msg_layer_create_payload_length(DP_Message *msg)
 {
     DP_MsgLayerCreate *mlc = DP_message_internal(msg);
-    return 11 + DP_uint16_to_size(mlc->name_len);
+    return ((size_t)11) + DP_uint16_to_size(mlc->name_len);
 }
 
 static size_t msg_layer_create_serialize_payload(DP_Message *msg,
@@ -2646,8 +2646,8 @@ DP_Message *DP_msg_layer_create_deserialize(unsigned int context_id,
 {
     if (length < 11 || length > 65535) {
         DP_error_set("Wrong length for newlayer message; "
-                     "expected between 11 and 65535, got %zu",
-                     length);
+                     "expected between 11 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2740,7 +2740,7 @@ struct DP_MsgLayerAttributes {
 
 static size_t msg_layer_attributes_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 6;
+    return ((size_t)6);
 }
 
 static size_t msg_layer_attributes_serialize_payload(DP_Message *msg,
@@ -2806,8 +2806,8 @@ DP_Message *DP_msg_layer_attributes_deserialize(unsigned int context_id,
 {
     if (length != 6) {
         DP_error_set("Wrong length for layerattr message; "
-                     "expected 6, got %zu",
-                     length);
+                     "expected 6, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2867,7 +2867,7 @@ struct DP_MsgLayerRetitle {
 static size_t msg_layer_retitle_payload_length(DP_Message *msg)
 {
     DP_MsgLayerRetitle *mlr = DP_message_internal(msg);
-    return 2 + DP_uint16_to_size(mlr->title_len);
+    return ((size_t)2) + DP_uint16_to_size(mlr->title_len);
 }
 
 static size_t msg_layer_retitle_serialize_payload(DP_Message *msg,
@@ -2924,8 +2924,8 @@ DP_Message *DP_msg_layer_retitle_deserialize(unsigned int context_id,
 {
     if (length < 2 || length > 65535) {
         DP_error_set("Wrong length for retitlelayer message; "
-                     "expected between 2 and 65535, got %zu",
-                     length);
+                     "expected between 2 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -2974,7 +2974,7 @@ struct DP_MsgLayerOrder {
 static size_t msg_layer_order_payload_length(DP_Message *msg)
 {
     DP_MsgLayerOrder *mlo = DP_message_internal(msg);
-    return 2 + DP_int_to_size(mlo->layers_count) * 2;
+    return ((size_t)2) + DP_int_to_size(mlo->layers_count) * 2;
 }
 
 static size_t msg_layer_order_serialize_payload(DP_Message *msg,
@@ -3037,8 +3037,8 @@ DP_Message *DP_msg_layer_order_deserialize(unsigned int context_id,
 {
     if (length < 2 || length > 65535) {
         DP_error_set("Wrong length for layerorder message; "
-                     "expected between 2 and 65535, got %zu",
-                     length);
+                     "expected between 2 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -3046,8 +3046,8 @@ DP_Message *DP_msg_layer_order_deserialize(unsigned int context_id,
     size_t layers_bytes = length - read;
     if ((layers_bytes % 2) != 0) {
         DP_error_set("Wrong length for layers field in layerorder message; "
-                     "%zu not divisible by 2",
-                     layers_bytes);
+                     "%" DP_PZU " not divisible by 2",
+                     DP_PSZ(layers_bytes));
         return NULL;
     }
     uint16_t layers_count = DP_size_to_uint16(layers_bytes / 2);
@@ -3092,7 +3092,7 @@ struct DP_MsgLayerDelete {
 
 static size_t msg_layer_delete_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 4;
+    return ((size_t)4);
 }
 
 static size_t msg_layer_delete_serialize_payload(DP_Message *msg,
@@ -3147,8 +3147,8 @@ DP_Message *DP_msg_layer_delete_deserialize(unsigned int context_id,
 {
     if (length != 4) {
         DP_error_set("Wrong length for deletelayer message; "
-                     "expected 4, got %zu",
-                     length);
+                     "expected 4, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -3184,7 +3184,7 @@ struct DP_MsgLayerVisibility {
 
 static size_t msg_layer_visibility_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 3;
+    return ((size_t)3);
 }
 
 static size_t msg_layer_visibility_serialize_payload(DP_Message *msg,
@@ -3239,8 +3239,8 @@ DP_Message *DP_msg_layer_visibility_deserialize(unsigned int context_id,
 {
     if (length != 3) {
         DP_error_set("Wrong length for layervisibility message; "
-                     "expected 3, got %zu",
-                     length);
+                     "expected 3, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -3283,7 +3283,7 @@ struct DP_MsgPutImage {
 static size_t msg_put_image_payload_length(DP_Message *msg)
 {
     DP_MsgPutImage *mpi = DP_message_internal(msg);
-    return 19 + mpi->image_size;
+    return ((size_t)19) + mpi->image_size;
 }
 
 static size_t msg_put_image_serialize_payload(DP_Message *msg,
@@ -3363,8 +3363,8 @@ DP_Message *DP_msg_put_image_deserialize(unsigned int context_id,
 {
     if (length < 19 || length > 65535) {
         DP_error_set("Wrong length for putimage message; "
-                     "expected between 19 and 65535, got %zu",
-                     length);
+                     "expected between 19 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -3452,7 +3452,7 @@ struct DP_MsgFillRect {
 
 static size_t msg_fill_rect_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 23;
+    return ((size_t)23);
 }
 
 static size_t msg_fill_rect_serialize_payload(DP_Message *msg,
@@ -3524,8 +3524,8 @@ DP_Message *DP_msg_fill_rect_deserialize(unsigned int context_id,
 {
     if (length != 23) {
         DP_error_set("Wrong length for fillrect message; "
-                     "expected 23, got %zu",
-                     length);
+                     "expected 23, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -3600,8 +3600,8 @@ DP_Message *DP_msg_pen_up_deserialize(unsigned int context_id,
 {
     if (length != 0) {
         DP_error_set("Wrong length for penup message; "
-                     "expected 0, got %zu",
-                     length);
+                     "expected 0, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     return DP_msg_pen_up_new(context_id);
@@ -3620,7 +3620,7 @@ struct DP_MsgAnnotationCreate {
 
 static size_t msg_annotation_create_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 14;
+    return ((size_t)14);
 }
 
 static size_t msg_annotation_create_serialize_payload(DP_Message *msg,
@@ -3686,8 +3686,8 @@ DP_Message *DP_msg_annotation_create_deserialize(unsigned int context_id,
 {
     if (length != 14) {
         DP_error_set("Wrong length for newannotation message; "
-                     "expected 14, got %zu",
-                     length);
+                     "expected 14, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -3747,7 +3747,7 @@ struct DP_MsgAnnotationReshape {
 
 static size_t msg_annotation_reshape_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 14;
+    return ((size_t)14);
 }
 
 static size_t msg_annotation_reshape_serialize_payload(DP_Message *msg,
@@ -3813,8 +3813,8 @@ DP_Message *DP_msg_annotation_reshape_deserialize(unsigned int context_id,
 {
     if (length != 14) {
         DP_error_set("Wrong length for reshapeannotation message; "
-                     "expected 14, got %zu",
-                     length);
+                     "expected 14, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -3890,7 +3890,7 @@ struct DP_MsgAnnotationEdit {
 static size_t msg_annotation_edit_payload_length(DP_Message *msg)
 {
     DP_MsgAnnotationEdit *mae = DP_message_internal(msg);
-    return 8 + DP_uint16_to_size(mae->text_len);
+    return ((size_t)8) + DP_uint16_to_size(mae->text_len);
 }
 
 static size_t msg_annotation_edit_serialize_payload(DP_Message *msg,
@@ -3959,8 +3959,8 @@ DP_Message *DP_msg_annotation_edit_deserialize(unsigned int context_id,
 {
     if (length < 8 || length > 65535) {
         DP_error_set("Wrong length for editannotation message; "
-                     "expected between 8 and 65535, got %zu",
-                     length);
+                     "expected between 8 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -4028,7 +4028,7 @@ struct DP_MsgAnnotationDelete {
 
 static size_t msg_annotation_delete_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 2;
+    return ((size_t)2);
 }
 
 static size_t msg_annotation_delete_serialize_payload(DP_Message *msg,
@@ -4079,8 +4079,8 @@ DP_Message *DP_msg_annotation_delete_deserialize(unsigned int context_id,
 {
     if (length != 2) {
         DP_error_set("Wrong length for deleteannotation message; "
-                     "expected 2, got %zu",
-                     length);
+                     "expected 2, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -4123,7 +4123,7 @@ struct DP_MsgMoveRegion {
 static size_t msg_move_region_payload_length(DP_Message *msg)
 {
     DP_MsgMoveRegion *mmr = DP_message_internal(msg);
-    return 50 + mmr->mask_size;
+    return ((size_t)50) + mmr->mask_size;
 }
 
 static size_t msg_move_region_serialize_payload(DP_Message *msg,
@@ -4227,8 +4227,8 @@ DP_Message *DP_msg_move_region_deserialize(unsigned int context_id,
 {
     if (length < 50 || length > 65535) {
         DP_error_set("Wrong length for moveregion message; "
-                     "expected between 50 and 65535, got %zu",
-                     length);
+                     "expected between 50 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -4368,7 +4368,7 @@ struct DP_MsgPutTile {
 static size_t msg_put_tile_payload_length(DP_Message *msg)
 {
     DP_MsgPutTile *mpt = DP_message_internal(msg);
-    return 10 + mpt->image_size;
+    return ((size_t)10) + mpt->image_size;
 }
 
 static size_t msg_put_tile_serialize_payload(DP_Message *msg,
@@ -4450,8 +4450,8 @@ DP_Message *DP_msg_put_tile_deserialize(unsigned int context_id,
 {
     if (length < 10 || length > 65535) {
         DP_error_set("Wrong length for puttile message; "
-                     "expected between 10 and 65535, got %zu",
-                     length);
+                     "expected between 10 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -4594,8 +4594,8 @@ DP_Message *DP_msg_canvas_background_deserialize(unsigned int context_id,
 {
     if (length > 65535) {
         DP_error_set("Wrong length for background message; "
-                     "expected between 0 and 65535, got %zu",
-                     length);
+                     "expected between 0 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -4774,7 +4774,7 @@ struct DP_MsgDrawDabsClassic {
 static size_t msg_draw_dabs_classic_payload_length(DP_Message *msg)
 {
     DP_MsgDrawDabsClassic *mddc = DP_message_internal(msg);
-    return 15 + DP_int_to_size(mddc->dabs_count) * 6;
+    return ((size_t)15) + DP_int_to_size(mddc->dabs_count) * 6;
 }
 
 static size_t msg_draw_dabs_classic_serialize_payload(DP_Message *msg,
@@ -4851,8 +4851,8 @@ DP_Message *DP_msg_draw_dabs_classic_deserialize(unsigned int context_id,
 {
     if (length < 21 || length > 65535) {
         DP_error_set("Wrong length for classicdabs message; "
-                     "expected between 21 and 65535, got %zu",
-                     length);
+                     "expected between 21 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -4864,8 +4864,8 @@ DP_Message *DP_msg_draw_dabs_classic_deserialize(unsigned int context_id,
     size_t dabs_bytes = length - read;
     if ((dabs_bytes % 6) != 0) {
         DP_error_set("Wrong length for dabs field in classicdabs message; "
-                     "%zu not divisible by 6",
-                     dabs_bytes);
+                     "%" DP_PZU " not divisible by 6",
+                     DP_PSZ(dabs_bytes));
         return NULL;
     }
     int dabs_count = DP_size_to_int(dabs_bytes) / 6;
@@ -5059,7 +5059,7 @@ struct DP_MsgDrawDabsPixel {
 static size_t msg_draw_dabs_pixel_payload_length(DP_Message *msg)
 {
     DP_MsgDrawDabsPixel *mddp = DP_message_internal(msg);
-    return 15 + DP_int_to_size(mddp->dabs_count) * 4;
+    return ((size_t)15) + DP_int_to_size(mddp->dabs_count) * 4;
 }
 
 static size_t msg_draw_dabs_pixel_serialize_payload(DP_Message *msg,
@@ -5135,8 +5135,8 @@ DP_Message *DP_msg_draw_dabs_pixel_deserialize(unsigned int context_id,
 {
     if (length < 19 || length > 65535) {
         DP_error_set("Wrong length for pixeldabs message; "
-                     "expected between 19 and 65535, got %zu",
-                     length);
+                     "expected between 19 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -5148,8 +5148,8 @@ DP_Message *DP_msg_draw_dabs_pixel_deserialize(unsigned int context_id,
     size_t dabs_bytes = length - read;
     if ((dabs_bytes % 4) != 0) {
         DP_error_set("Wrong length for dabs field in pixeldabs message; "
-                     "%zu not divisible by 4",
-                     dabs_bytes);
+                     "%" DP_PZU " not divisible by 4",
+                     DP_PSZ(dabs_bytes));
         return NULL;
     }
     int dabs_count = DP_size_to_int(dabs_bytes) / 4;
@@ -5237,8 +5237,8 @@ DP_Message *DP_msg_draw_dabs_pixel_square_deserialize(
 {
     if (length < 19 || length > 65535) {
         DP_error_set("Wrong length for squarepixeldabs message; "
-                     "expected between 19 and 65535, got %zu",
-                     length);
+                     "expected between 19 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -5250,8 +5250,8 @@ DP_Message *DP_msg_draw_dabs_pixel_square_deserialize(
     size_t dabs_bytes = length - read;
     if ((dabs_bytes % 4) != 0) {
         DP_error_set("Wrong length for dabs field in squarepixeldabs message; "
-                     "%zu not divisible by 4",
-                     dabs_bytes);
+                     "%" DP_PZU " not divisible by 4",
+                     DP_PSZ(dabs_bytes));
         return NULL;
     }
     int dabs_count = DP_size_to_int(dabs_bytes) / 4;
@@ -5438,7 +5438,7 @@ struct DP_MsgDrawDabsMyPaint {
 static size_t msg_draw_dabs_mypaint_payload_length(DP_Message *msg)
 {
     DP_MsgDrawDabsMyPaint *mddmp = DP_message_internal(msg);
-    return 15 + DP_int_to_size(mddmp->dabs_count) * 8;
+    return ((size_t)15) + DP_int_to_size(mddmp->dabs_count) * 8;
 }
 
 static size_t msg_draw_dabs_mypaint_serialize_payload(DP_Message *msg,
@@ -5515,8 +5515,8 @@ DP_Message *DP_msg_draw_dabs_mypaint_deserialize(unsigned int context_id,
 {
     if (length < 23 || length > 65535) {
         DP_error_set("Wrong length for mypaintdabs message; "
-                     "expected between 23 and 65535, got %zu",
-                     length);
+                     "expected between 23 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -5528,8 +5528,8 @@ DP_Message *DP_msg_draw_dabs_mypaint_deserialize(unsigned int context_id,
     size_t dabs_bytes = length - read;
     if ((dabs_bytes % 8) != 0) {
         DP_error_set("Wrong length for dabs field in mypaintdabs message; "
-                     "%zu not divisible by 8",
-                     dabs_bytes);
+                     "%" DP_PZU " not divisible by 8",
+                     DP_PSZ(dabs_bytes));
         return NULL;
     }
     int dabs_count = DP_size_to_int(dabs_bytes) / 8;
@@ -5608,7 +5608,7 @@ struct DP_MsgMoveRect {
 static size_t msg_move_rect_payload_length(DP_Message *msg)
 {
     DP_MsgMoveRect *mmr = DP_message_internal(msg);
-    return 26 + mmr->mask_size;
+    return ((size_t)26) + mmr->mask_size;
 }
 
 static size_t msg_move_rect_serialize_payload(DP_Message *msg,
@@ -5691,8 +5691,8 @@ DP_Message *DP_msg_move_rect_deserialize(unsigned int context_id,
 {
     if (length < 26 || length > 65535) {
         DP_error_set("Wrong length for moverect message; "
-                     "expected between 26 and 65535, got %zu",
-                     length);
+                     "expected between 26 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -5798,7 +5798,7 @@ struct DP_MsgSetMetadataInt {
 
 static size_t msg_set_metadata_int_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 5;
+    return ((size_t)5);
 }
 
 static size_t msg_set_metadata_int_serialize_payload(DP_Message *msg,
@@ -5853,8 +5853,8 @@ DP_Message *DP_msg_set_metadata_int_deserialize(unsigned int context_id,
 {
     if (length != 5) {
         DP_error_set("Wrong length for setmetadataint message; "
-                     "expected 5, got %zu",
-                     length);
+                     "expected 5, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -5892,7 +5892,7 @@ struct DP_MsgSetMetadataStr {
 static size_t msg_set_metadata_str_payload_length(DP_Message *msg)
 {
     DP_MsgSetMetadataStr *msms = DP_message_internal(msg);
-    return 1 + DP_uint16_to_size(msms->value_len);
+    return ((size_t)1) + DP_uint16_to_size(msms->value_len);
 }
 
 static size_t msg_set_metadata_str_serialize_payload(DP_Message *msg,
@@ -5950,8 +5950,8 @@ DP_Message *DP_msg_set_metadata_str_deserialize(unsigned int context_id,
 {
     if (length < 1 || length > 65535) {
         DP_error_set("Wrong length for setmetadatastr message; "
-                     "expected between 1 and 65535, got %zu",
-                     length);
+                     "expected between 1 and 65535, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -6001,7 +6001,7 @@ struct DP_MsgSetTimelineFrame {
 static size_t msg_set_timeline_frame_payload_length(DP_Message *msg)
 {
     DP_MsgSetTimelineFrame *mstf = DP_message_internal(msg);
-    return 3 + DP_int_to_size(mstf->layers_count) * 2;
+    return ((size_t)3) + DP_int_to_size(mstf->layers_count) * 2;
 }
 
 static size_t msg_set_timeline_frame_serialize_payload(DP_Message *msg,
@@ -6070,8 +6070,8 @@ DP_Message *DP_msg_set_timeline_frame_deserialize(unsigned int context_id,
 {
     if (length < 3 || length > 27) {
         DP_error_set("Wrong length for settimelineframe message; "
-                     "expected between 3 and 27, got %zu",
-                     length);
+                     "expected between 3 and 27, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -6081,8 +6081,8 @@ DP_Message *DP_msg_set_timeline_frame_deserialize(unsigned int context_id,
     if ((layers_bytes % 2) != 0) {
         DP_error_set(
             "Wrong length for layers field in settimelineframe message; "
-            "%zu not divisible by 2",
-            layers_bytes);
+            "%" DP_PZU " not divisible by 2",
+            DP_PSZ(layers_bytes));
         return NULL;
     }
     uint16_t layers_count = DP_size_to_uint16(layers_bytes / 2);
@@ -6135,7 +6135,7 @@ struct DP_MsgRemoveTimelineFrame {
 static size_t
 msg_remove_timeline_frame_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 2;
+    return ((size_t)2);
 }
 
 static size_t msg_remove_timeline_frame_serialize_payload(DP_Message *msg,
@@ -6186,8 +6186,8 @@ DP_Message *DP_msg_remove_timeline_frame_deserialize(
 {
     if (length != 2) {
         DP_error_set("Wrong length for removetimelineframe message; "
-                     "expected 2, got %zu",
-                     length);
+                     "expected 2, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;
@@ -6217,7 +6217,7 @@ struct DP_MsgUndo {
 
 static size_t msg_undo_payload_length(DP_UNUSED DP_Message *msg)
 {
-    return 2;
+    return ((size_t)2);
 }
 
 static size_t msg_undo_serialize_payload(DP_Message *msg, unsigned char *data)
@@ -6268,8 +6268,8 @@ DP_Message *DP_msg_undo_deserialize(unsigned int context_id,
 {
     if (length != 2) {
         DP_error_set("Wrong length for undo message; "
-                     "expected 2, got %zu",
-                     length);
+                     "expected 2, got %" DP_PZU,
+                     DP_PSZ(length));
         return NULL;
     }
     size_t read = 0;

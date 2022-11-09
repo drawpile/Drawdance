@@ -406,7 +406,7 @@ static size_t write_string_with_length(const char *DP_RESTRICT x, size_t len,
             {% if dpl %}
                 {{ message.param }} = DP_message_internal(msg);
             {% endif %}
-            return {% if spl %}{{ spl }}{% endif -%}
+            return {% if spl %}((size_t){{ spl }}){% endif -%}
                    {% if spl and dpl %} + {% endif -%}
                    {% if dpl %}{{ dpl }}{% endif %};
         }
@@ -503,14 +503,14 @@ static size_t write_string_with_length(const char *DP_RESTRICT x, size_t len,
         {% if message.min_length == message.max_length %}
             if (length != {{ message.min_length }}) {
                 DP_error_set("Wrong length for {{ message.cmd_name }} message; "
-                             "expected {{ message.min_length }}, got %zu", length);
+                             "expected {{ message.min_length }}, got %" DP_PZU, DP_PSZ(length));
                 return NULL;
             }
         {% else %}
             if ({% if message.min_length > 0 %}length < {{ message.min_length }} || {% endif %}
                     length > {{ message.max_length }}) {
                 DP_error_set("Wrong length for {{ message.cmd_name }} message; "
-                             "expected between {{ message.min_length }} and {{ message.max_length }}, got %zu", length);
+                             "expected between {{ message.min_length }} and {{ message.max_length }}, got %" DP_PZU, DP_PSZ(length));
                 return NULL;
             }
         {% endif %}
@@ -525,16 +525,16 @@ static size_t write_string_with_length(const char *DP_RESTRICT x, size_t len,
                 {% if deserialize_field_divisor > 1 %}
                     if (({{ f.name }}_bytes % {{ deserialize_field_divisor }}) != 0) {
                         DP_error_set("Wrong length for {{ f.name }} field in {{ message.cmd_name }} message; "
-                                     "%zu not divisible by {{ deserialize_field_divisor }}",
-                                     {{ f.name }}_bytes);
+                                     "%" DP_PZU " not divisible by {{ deserialize_field_divisor }}",
+                                     DP_PSZ({{ f.name }}_bytes));
                         return NULL;
                     }
                 {% endif %}
                 {% if f.deserialize_field_check_remaining %}
                     if (read + {{ f.name }}_bytes > length) {
                         DP_error_set("Wrong length for {{ f.name }} field in {{ message.cmd_name }} message; "
-                                     "field length %zu exceeds total length %zu",
-                                     {{ f.name }}_bytes, length);
+                                     "field length %" DP_PZU " exceeds total length %" DP_PZU,
+                                     DP_PSZ({{ f.name }}_bytes), DP_PSZ(length));
                         return NULL;
                     }
                 {% endif %}

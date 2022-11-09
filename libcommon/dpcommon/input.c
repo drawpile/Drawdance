@@ -121,8 +121,8 @@ static bool file_input_rewind_by(void *internal, size_t size)
         return true;
     }
     else {
-        DP_error_set("File input could not rewind by %zu: %s", size,
-                     strerror(errno));
+        DP_error_set("File input could not rewind by %" DP_PZU ": %s",
+                     DP_PSZ(size), strerror(errno));
         return false;
     }
 }
@@ -195,8 +195,9 @@ static bool mem_input_rewind_by(void *internal, size_t size)
         return true;
     }
     else {
-        DP_error_set("Mem input at position %zu can't be rewound by %zu",
-                     state->pos, size);
+        DP_error_set("Mem input at position %" DP_PZU
+                     " can't be rewound by %" DP_PZU,
+                     DP_PSZ(state->pos), DP_PSZ(size));
         return false;
     }
 }

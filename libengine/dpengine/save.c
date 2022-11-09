@@ -5,6 +5,15 @@
 #include <dpcommon/output.h>
 #include <ctype.h>
 #ifdef DRAWDANCE_OPENRASTER
+#    include "image_png.h"
+#    include "layer_content.h"
+#    include "layer_group.h"
+#    include "layer_list.h"
+#    include "layer_props.h"
+#    include "layer_props_list.h"
+#    include <dpcommon/conversions.h>
+#    include <dpcommon/output.h>
+#    include <uthash_inc.h>
 #    include <zip.h>
 #endif
 
@@ -28,49 +37,167 @@ const DP_SaveFormat *DP_save_supported_formats(void)
 
 #ifdef DRAWDANCE_OPENRASTER
 
-static void warn_zip_error(const char *title, zip_error_t *ze)
+typedef struct DP_SaveOraOffsets {
+    int layer_id;
+    int offset_x, offset_y;
+    UT_hash_handle hh;
+} DP_SaveOraOffsets;
+
+typedef struct DP_SaveOraContext {
+    zip_t *archive;
+    DP_SaveOraOffsets *offsets;
+} DP_SaveOraContext;
+
+void save_ora_context_dispose(DP_SaveOraContext *c)
 {
-    DP_warn("Save ORA: %s: %s", title,
-            ze ? zip_error_strerror(ze) : "null error");
+    DP_SaveOraOffsets *soo, *tmp;
+    HASH_ITER(hh, c->offsets, soo, tmp)
+    {
+        HASH_DEL(c->offsets, soo);
+        DP_free(soo);
+    }
 }
 
-static void warn_zip_archive_error(const char *title, zip_t *archive)
+
+static const char *ora_strerror(zip_error_t *ze)
 {
-    warn_zip_error(title, zip_get_error(archive));
+    if (ze) {
+        const char *str = zip_error_strerror(ze);
+        if (str) {
+            return str;
+        }
+    }
+    return "null error";
 }
 
-static void warn_zip_error_code(const char *title, int errcode)
+static const char *ora_archive_error(zip_t *archive)
 {
-    zip_error_t ze;
-    zip_error_init_with_code(&ze, errcode);
-    warn_zip_error(title, &ze);
-    zip_error_fini(&ze);
+    return ora_strerror(zip_get_error(archive));
 }
 
-static bool store_ora_mimetype(zip_t *archive)
+static bool ora_mkdir(zip_t *archive, const char *name)
 {
-    static const char *mimetype = "image/openraster";
-    zip_source_t *source =
-        zip_source_buffer(archive, mimetype, strlen(mimetype), 0);
+    if (zip_dir_add(archive, name, ZIP_FL_ENC_UTF_8) != -1) {
+        return true;
+    }
+    else {
+        DP_warn("Error creating directory '%s': %s", name,
+                ora_archive_error(archive));
+        return false;
+    }
+}
+
+static bool ora_store_buffer(zip_t *archive, const char *name,
+                             const void *buffer, size_t size, bool take,
+                             zip_int32_t compression)
+{
+    zip_source_t *source = zip_source_buffer(archive, buffer, size, take);
     if (!source) {
-        warn_zip_archive_error("create mimetype source", archive);
+        DP_warn("Error creating source for '%s': %s", name,
+                ora_archive_error(archive));
+        if (take) {
+            DP_free((void *)buffer);
+        }
         return false;
     }
 
-    zip_int64_t index =
-        zip_file_add(archive, "mimetype", source, ZIP_FL_ENC_UTF_8);
+    zip_int64_t index = zip_file_add(archive, name, source, ZIP_FL_ENC_UTF_8);
     if (index < 0) {
-        warn_zip_archive_error("store mimetype", archive);
+        DP_warn("Error storing '%s': %s", name, ora_archive_error(archive));
         zip_source_free(source);
         return false;
     }
 
     zip_uint64_t uindex = (zip_uint64_t)index;
-    if (zip_set_file_compression(archive, uindex, ZIP_CM_STORE, 0) != 0) {
-        warn_zip_archive_error("set mimetype compression", archive);
+    if (zip_set_file_compression(archive, uindex, compression, 0) != 0) {
+        DP_warn("Error setting compression for '%s': %s", name,
+                ora_archive_error(archive));
         return false;
     }
 
+    return true;
+}
+
+static bool ora_store_mimetype(zip_t *archive)
+{
+    static const char *mimetype = "image/openraster";
+    return ora_store_buffer(archive, "mimetype", mimetype, strlen(mimetype),
+                            false, ZIP_CM_STORE);
+}
+
+static void *image_to_png(DP_Image *img, size_t *out_size)
+{
+    void **buffer_ptr;
+    DP_Output *output = DP_mem_output_new(64, false, &buffer_ptr, &out_size);
+
+    bool ok;
+    if (img) {
+        ok = DP_image_write_png(img, output);
+        DP_image_free(img);
+    }
+    else {
+        ok = DP_image_png_write(output, 0, 0, NULL);
+    }
+
+    void *buffer = *buffer_ptr;
+    DP_output_free(output);
+
+    if (ok) {
+        return buffer;
+    }
+    else {
+        DP_free(buffer);
+        return NULL;
+    }
+}
+
+static bool ora_store_layer(DP_SaveOraContext *c, DP_LayerContent *lc,
+                            DP_LayerProps *lp)
+{
+    DP_SaveOraOffsets *soo = DP_malloc(sizeof(*soo));
+    soo->layer_id = DP_layer_props_id(lp);
+    soo->offset_x = 0;
+    soo->offset_y = 0;
+    HASH_ADD_INT(c->offsets, layer_id, soo);
+
+    size_t size;
+    void *buffer = image_to_png(
+        DP_layer_content_to_image_cropped(lc, &soo->offset_x, &soo->offset_y),
+        &size);
+    if (!buffer) {
+        return false;
+    }
+
+    char *name = DP_format("data/layer-%04x.png", soo->layer_id);
+    bool ok =
+        ora_store_buffer(c->archive, name, buffer, size, true, ZIP_CM_STORE);
+    DP_free(name);
+    return ok;
+}
+
+static bool ora_store_layers(DP_SaveOraContext *c, DP_LayerList *ll,
+                             DP_LayerPropsList *lpl)
+{
+    int count = DP_layer_list_count(ll);
+    DP_ASSERT(DP_layer_props_list_count(lpl) == count);
+    for (int i = 0; i < count; ++i) {
+        DP_LayerListEntry *lle = DP_layer_list_at_noinc(ll, i);
+        DP_LayerProps *lp = DP_layer_props_list_at_noinc(lpl, i);
+        if (DP_layer_list_entry_is_group(lle)) {
+            DP_LayerGroup *lg = DP_layer_list_entry_group_noinc(lle);
+            DP_LayerList *child_ll = DP_layer_group_children_noinc(lg);
+            DP_LayerPropsList *child_lpl = DP_layer_props_children_noinc(lp);
+            if (!ora_store_layers(c, child_ll, child_lpl)) {
+                return false;
+            }
+        }
+        else {
+            DP_LayerContent *lc = DP_layer_list_entry_content_noinc(lle);
+            if (!ora_store_layer(c, lc, lp)) {
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -79,19 +206,28 @@ static DP_SaveResult save_ora(DP_CanvasState *cs, const char *path)
     int errcode;
     zip_t *archive = zip_open(path, ZIP_CREATE | ZIP_TRUNCATE, &errcode);
     if (!archive) {
-        warn_zip_error_code("open archive", errcode);
+        zip_error_t ze;
+        zip_error_init_with_code(&ze, errcode);
+        DP_warn("Error opening '%s': %s", path, ora_strerror(&ze));
+        zip_error_fini(&ze);
         return DP_SAVE_RESULT_OPEN_ERROR;
     }
 
-    if (!store_ora_mimetype(archive)) {
+    if (!ora_store_mimetype(archive) || !ora_mkdir(archive, "data")
+        || !ora_mkdir(archive, "Thumbnails")) {
         zip_discard(archive);
         return DP_SAVE_RESULT_WRITE_ERROR;
     }
 
+    DP_SaveOraContext c = {archive, NULL};
+    ora_store_layers(&c, DP_canvas_state_layers_noinc(cs),
+                     DP_canvas_state_layer_props_noinc(cs));
     // TODO
 
+    save_ora_context_dispose(&c);
+
     if (zip_close(archive) != 0) {
-        warn_zip_archive_error("close archive", archive);
+        DP_warn("Error closing '%s': %s", path, ora_archive_error(archive));
         zip_discard(archive);
         return DP_SAVE_RESULT_WRITE_ERROR;
     }

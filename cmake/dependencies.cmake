@@ -56,11 +56,12 @@ else()
         find_package(Qt5 COMPONENTS Core REQUIRED)
     endif()
 
-    find_package(SDL2 REQUIRED)
+    if(BUILD_APPS)
+        find_package(SDL2 REQUIRED)
+        find_package(CURL MODULE REQUIRED COMPONENTS HTTPS HTTP SSL)
+    endif()
 
-    find_package(CURL MODULE REQUIRED COMPONENTS HTTPS HTTP SSL)
-
-    find_package(libzip)
+    # find_package(libzip)
 
     find_package(Qt5 COMPONENTS Core Gui)
 endif()

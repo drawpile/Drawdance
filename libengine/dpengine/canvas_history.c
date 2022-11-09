@@ -139,14 +139,15 @@ static void dump_history(DP_CanvasHistory *ch)
             DP_message_type_enum_name_unprefixed(DP_message_type(msg)),
             DP_message_context_id(msg), (void *)entry->state);
     }
-    HISTORY_DEBUG("fork %zu used, %zu capacity, %d start, %d fallbehind",
-                  ch->fork.queue.used, ch->fork.queue.capacity, ch->fork.start,
-                  ch->fork.fallbehind);
+    HISTORY_DEBUG("fork %" DP_PZU " used, %" DP_PZU
+                  " capacity, %d start, %d fallbehind",
+                  DP_PSZ(ch->fork.queue.used), DP_PSZ(ch->fork.queue.capacity),
+                  ch->fork.start, ch->fork.fallbehind);
     for (size_t i = 0; i < ch->fork.queue.used; ++i) {
         DP_ForkEntry *fe = DP_queue_at(&ch->fork.queue, sizeof(*fe), i);
         DP_Message *msg = fe->msg;
         HISTORY_DEBUG(
-            "    F[%zu] %s user %u", i,
+            "    F[%" DP_PZU "] %s user %u", DP_PSZ(i),
             DP_message_type_enum_name_unprefixed(DP_message_type(msg)),
             DP_message_context_id(msg));
     }
@@ -173,7 +174,8 @@ static void dispose_fork_entry(void *element)
 static void clear_fork_entries(DP_CanvasHistory *ch)
 {
     DP_ASSERT(ch);
-    HISTORY_DEBUG("Clear %zu fork entries", ch->fork.queue.used);
+    HISTORY_DEBUG("Clear %" DP_PZU " fork entries",
+                  DP_PSZ(ch->fork.queue.used));
     DP_queue_clear(&ch->fork.queue, sizeof(DP_ForkEntry), dispose_fork_entry);
 }
 
@@ -181,7 +183,7 @@ static void push_fork_entry_noinc(DP_CanvasHistory *ch, DP_Message *msg)
 {
     DP_ASSERT(ch);
     DP_ASSERT(msg);
-    HISTORY_DEBUG("Push fork element %zu", ch->fork.queue.used);
+    HISTORY_DEBUG("Push fork element %" DP_PZU, DP_PSZ(ch->fork.queue.used));
     DP_ForkEntry *fe = DP_queue_push(&ch->fork.queue, sizeof(DP_ForkEntry));
     *fe = (DP_ForkEntry){msg, DP_affected_area_make(msg, ch->current_state)};
 }
@@ -210,7 +212,7 @@ static DP_Message *peek_fork_entry_message(DP_CanvasHistory *ch)
 static void shift_fork_entry_nodec(DP_CanvasHistory *ch)
 {
     DP_queue_shift(&ch->fork.queue);
-    HISTORY_DEBUG("Shift fork element %zu", ch->fork.queue.used);
+    HISTORY_DEBUG("Shift fork element %" DP_PZU, DP_PSZ(ch->fork.queue.used));
 }
 
 static bool fork_entry_concurrent_with(void *element, void *user)

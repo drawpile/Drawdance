@@ -50,6 +50,19 @@
 #    define DP_UNREACHABLE() DP_panic("unreachable")
 #endif
 
+// Printing a size_t on Windows is a complete trash fire. Punt to using unsigned
+// long there and deal with the dynamic format specifier and parameter casts.
+// There's probably ways around this by using a more modern MinGW and/or linking
+// with a later MSVC runtime, but I'll leave that to someone that knows anything
+// about Windows development, for I only know it for its agony and confusion.
+#ifdef _WIN32
+#    define DP_PZU    "lu"
+#    define DP_PSZ(X) ((unsigned long)(X))
+#else
+#    define DP_PZU    "zu"
+#    define DP_PSZ(X) (X)
+#endif
+
 #ifdef __GNUC__
 #    define DP_TRAP() __builtin_trap()
 #    define DP_UNUSED __attribute__((__unused__))
@@ -58,12 +71,7 @@
 #    endif
 #    define DP_FORMAT(STRING_INDEX, FIRST_TO_CHECK) \
         __attribute__((__format__(printf, STRING_INDEX, FIRST_TO_CHECK)))
-#    ifdef __clang__
-#        define DP_MALLOC_ATTR __attribute__((malloc, alloc_size(1)))
-#    else
-#        define DP_MALLOC_ATTR \
-            __attribute__((malloc, malloc(DP_free, 1), alloc_size(1)))
-#    endif
+#    define DP_MALLOC_ATTR  __attribute__((malloc, alloc_size(1)))
 #    define DP_REALLOC_ATTR __attribute__((malloc, alloc_size(2)))
 #    define DP_MUST_CHECK   __attribute((warn_unused_result))
 #    define DP_INLINE       DP_UNUSED static inline

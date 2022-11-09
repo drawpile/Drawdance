@@ -107,8 +107,9 @@ static unsigned char *get_inflate_output_buffer(size_t out_size, void *user)
         return (unsigned char *)args->buffer;
     }
     else {
-        DP_error_set("Tile decompression needs size %zu, but got %zu",
-                     (size_t)DP_TILE_COMPRESSED_BYTES, out_size);
+        DP_error_set(
+            "Tile decompression needs size %" DP_PZU ", but got %" DP_PZU,
+            DP_PSZ((size_t)DP_TILE_COMPRESSED_BYTES), DP_PSZ(out_size));
         return NULL;
     }
 }

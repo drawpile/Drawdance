@@ -74,11 +74,12 @@ void DP_free(void *ptr)
 void *DP_malloc(size_t size)
 {
     void *ptr = malloc(size);
-    if (ptr) {
+    if (ptr || size == 0) {
         return ptr;
     }
     else {
-        fprintf(stderr, "Allocation of %zu bytes failed\n", size);
+        fprintf(stderr, "Allocation of %" DP_PZU " bytes failed\n",
+                DP_PSZ(size));
         DP_TRAP();
     }
 }
@@ -86,11 +87,12 @@ void *DP_malloc(size_t size)
 void *DP_realloc(void *ptr, size_t size)
 {
     void *new_ptr = realloc(ptr, size);
-    if (new_ptr) {
+    if (new_ptr || size == 0) {
         return new_ptr;
     }
     else {
-        fprintf(stderr, "Reallocation of %zu bytes failed\n", size);
+        fprintf(stderr, "Reallocation of %" DP_PZU " bytes failed\n",
+                DP_PSZ(size));
         DP_TRAP();
     }
 }
@@ -164,8 +166,9 @@ void *DP_slurp(const char *path, size_t *out_length)
     buf = DP_malloc(size);
     size_t read = fread(buf, 1, length, fp);
     if (read != length) {
-        DP_error_set("Can't read %zu bytes from '%s': got %zu bytes", length,
-                     path, read);
+        DP_error_set("Can't read %" DP_PZU " bytes from '%s': got %" DP_PZU
+                     " bytes",
+                     DP_PSZ(length), path, DP_PSZ(read));
         DP_free(buf);
         buf = NULL;
         goto slurp_close;

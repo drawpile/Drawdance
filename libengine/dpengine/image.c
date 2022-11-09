@@ -110,8 +110,9 @@ static unsigned char *get_output_buffer(size_t out_size, void *user)
         return (unsigned char *)img->pixels;
     }
     else {
-        DP_error_set("Image decompression needs size %zu, but got %zu",
-                     expected_size, out_size);
+        DP_error_set("Image decompression needs size %" DP_PZU
+                     ", but got %" DP_PZU,
+                     DP_PSZ(expected_size), DP_PSZ(out_size));
         return NULL;
     }
 }
@@ -130,7 +131,7 @@ DP_Image *DP_image_new_from_compressed(int width, int height,
             pixels[i].color = DP_swap_uint32(pixels[i].color);
         }
 #else
-#       error "Unknown byte order"
+#    error "Unknown byte order"
 #endif
         return args.img;
     }
@@ -161,8 +162,9 @@ static unsigned char *get_monochrome_buffer(size_t out_size, void *user)
         return buffer;
     }
     else {
-        DP_error_set("Monochrome decompression needs size %zu, but got %zu",
-                     expected_size, out_size);
+        DP_error_set("Monochrome decompression needs size %" DP_PZU
+                     ", but got %" DP_PZU,
+                     DP_PSZ(expected_size), DP_PSZ(out_size));
         return NULL;
     }
 }

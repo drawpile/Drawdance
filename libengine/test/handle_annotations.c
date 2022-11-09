@@ -63,7 +63,8 @@ static void dump(DP_Output *output, DP_CanvasHistory *ch, const char *title)
                          dump_valign(DP_annotation_valign(a)));
         size_t length;
         const char *text = DP_annotation_text(a, &length);
-        DP_output_format(output, "    text_length = %zu\n", length);
+        DP_output_format(output, "    text_length = %" DP_PZU "\n",
+                         DP_PSZ(length));
 
         JSON_Value *value = text ? json_value_init_string_with_len(text, length)
                                  : json_value_init_null();

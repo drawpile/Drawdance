@@ -154,7 +154,7 @@ void DP_user_bit_set(uint8_t *users, uint8_t user_id)
 void DP_user_bit_unset(uint8_t *users, uint8_t user_id)
 {
     DP_ASSERT(users);
-    users[user_id_index(user_id)] &= ~user_id_mask(user_id);
+    users[user_id_index(user_id)] &= (uint8_t)~user_id_mask(user_id);
 }
 
 void DP_user_bits_set(uint8_t *users, int count, const uint8_t *user_ids)

@@ -462,9 +462,9 @@ bool DP_test_str_len_eq_ok(DP_TestContext *T, const char *file, int line,
                               alen == blen && memcmp(a, b, alen) == 0, fmt, ap);
     va_end(ap);
     if (!result) {
-        DIAG_VALUE("actual length", "%zu", salen, alen);
+        DIAG_VALUE("actual length", "%" DP_PZU, salen, DP_PSZ(alen));
         DIAG_VALUE("actual string", "%*s", sa, DP_size_to_int(alen), a);
-        DIAG_VALUE("expected length", "%zu", sblen, blen);
+        DIAG_VALUE("expected length", "%" DP_PZU, sblen, DP_PSZ(blen));
         DIAG_VALUE("expected string", "%*s", sb, DP_size_to_int(blen), b);
     }
     return result;
@@ -549,9 +549,9 @@ bool DP_test_file_eq_ok(DP_TestContext *T, const char *file, int line,
         DP_test_vok(T, file, line, false, fmt, ap);
         va_end(ap);
         DIAG("file content lengths differ\n"
-             "actual length:   %zu\n"
-             "expected length: %zu",
-             length_a, length_b);
+             "actual length:   %" DP_PZU "\n"
+             "expected length: %" DP_PZU,
+             DP_PSZ(length_a), DP_PSZ(length_b));
         DIAG_VALUE("actual path", "%s", sa, a);
         DIAG_VALUE("expected path", "%s", sb, b);
         DP_free(content_a);
@@ -563,10 +563,10 @@ bool DP_test_file_eq_ok(DP_TestContext *T, const char *file, int line,
         unsigned char byte_a = content_a[i];
         unsigned char byte_b = content_b[i];
         if (byte_a != byte_b) {
-            DIAG("file bytes differ at %zu\n"
+            DIAG("file bytes differ at %" DP_PZU "\n"
                  "actual byte:   %02x\n"
                  "expected byte: %02x",
-                 i, DP_uchar_to_uint(byte_a), DP_uchar_to_uint(byte_b));
+                 DP_PSZ(i), DP_uchar_to_uint(byte_a), DP_uchar_to_uint(byte_b));
             DIAG_VALUE("actual path", "%s", sa, a);
             DIAG_VALUE("expected path", "%s", sb, b);
             DP_free(content_a);

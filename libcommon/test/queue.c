@@ -32,8 +32,11 @@ static void dump(DP_Output *output, DP_Queue *queue)
     size_t head = queue->head;
     size_t used = queue->used;
     size_t tail = (head + used) % capacity;
-    DP_output_format(output, "capacity=%zu, used=%zu, head=%zu, tail=%zu\n",
-                     capacity, used, head, tail);
+    DP_output_format(output,
+                     "capacity=%" DP_PZU ", used=%" DP_PZU ", head=%" DP_PZU
+                     ", tail=%" DP_PZU "\n",
+                     DP_PSZ(capacity), DP_PSZ(used), DP_PSZ(head),
+                     DP_PSZ(tail));
 
     int *elements = queue->elements;
     for (size_t i = 0; i < capacity; ++i) {
@@ -53,7 +56,8 @@ static void dump(DP_Output *output, DP_Queue *queue)
 
 static void init(DP_Output *output, DP_Queue *queue, size_t initial_capacity)
 {
-    DP_output_format(output, "-- init(%zu)\n", initial_capacity);
+    DP_output_format(output, "-- init(%" DP_PZU ")\n",
+                     DP_PSZ(initial_capacity));
     DP_queue_init(queue, initial_capacity, ELEMENT_SIZE);
     dump(output, queue);
 }

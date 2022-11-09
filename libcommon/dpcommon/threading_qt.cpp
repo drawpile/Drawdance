@@ -127,7 +127,7 @@ extern "C" DP_SemaphoreResult DP_semaphore_try_wait(DP_Semaphore *sem)
 
 extern "C" DP_Thread *DP_thread_new(DP_ThreadFn fn, void *data)
 {
-    QThread *qthread = QThread::create(fn, data);
+    QThread *qthread = QThread::create([=]() { fn(data); });
     qthread->start();
     return reinterpret_cast<DP_Thread *>(qthread);
 }
