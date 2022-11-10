@@ -84,7 +84,8 @@ struct DP_PaintEngine {
     DP_CanvasDiff *diff;
     DP_TransientLayerContent *tlc;
     DP_Tile *checker;
-    DP_CanvasState *cs;
+    DP_CanvasState *history_cs;
+    DP_CanvasState *view_cs;
     DP_PaintEnginePreview *preview;
     DP_DrawContext *preview_dc;
     DP_Queue local_queue;
@@ -327,7 +328,8 @@ DP_PaintEngine *DP_paint_engine_new(DP_AclState *acls,
     pe->checker = DP_tile_new_checker(
         0, (DP_Pixel15){DP_BIT15 / 2, DP_BIT15 / 2, DP_BIT15 / 2, DP_BIT15},
         (DP_Pixel15){DP_BIT15, DP_BIT15, DP_BIT15, DP_BIT15});
-    pe->cs = DP_canvas_history_compare_and_get(pe->ch, NULL, NULL);
+    pe->history_cs = DP_canvas_history_compare_and_get(pe->ch, NULL, NULL);
+    pe->view_cs = DP_canvas_state_incref(pe->history_cs);
     pe->preview = NULL;
     pe->preview_dc = NULL;
     DP_message_queue_init(&pe->local_queue, INITIAL_CAPACITY);
@@ -364,7 +366,8 @@ void DP_paint_engine_free_join(DP_PaintEngine *pe)
         DP_message_queue_dispose(&pe->local_queue);
         DP_draw_context_free(pe->preview_dc);
         free_preview(pe->preview);
-        DP_canvas_state_decref_nullable(pe->cs);
+        DP_canvas_state_decref_nullable(pe->history_cs);
+        DP_canvas_state_decref_nullable(pe->view_cs);
         DP_tile_decref(pe->checker);
         DP_transient_layer_content_decref(pe->tlc);
         DP_canvas_diff_free(pe->diff);
@@ -568,22 +571,19 @@ static DP_CanvasState *apply_preview(DP_PaintEngine *pe, DP_CanvasState *cs)
             preview->initial_offset_y - DP_canvas_state_offset_y(cs));
     }
     else {
-        return cs;
+        return DP_canvas_state_incref(cs);
     }
 }
 
 static void
-apply_changes(DP_PaintEngine *pe, DP_CanvasState *prev, DP_CanvasState *next,
-              DP_UserCursorBuffer *ucb, DP_PaintEngineResizedFn resized,
-              DP_CanvasDiffEachPosFn tile_changed,
-              DP_PaintEngineLayerPropsChangedFn layer_props_changed,
-              DP_PaintEngineAnnotationsChangedFn annotations_changed,
-              DP_PaintEngineDocumentMetadataChangedFn document_metadata_changed,
-              DP_PaintEngineCursorMovedFn cursor_moved, void *user)
+emit_changes(DP_PaintEngine *pe, DP_CanvasState *prev, DP_CanvasState *cs,
+             DP_UserCursorBuffer *ucb, DP_PaintEngineResizedFn resized,
+             DP_CanvasDiffEachPosFn tile_changed,
+             DP_PaintEngineLayerPropsChangedFn layer_props_changed,
+             DP_PaintEngineAnnotationsChangedFn annotations_changed,
+             DP_PaintEngineDocumentMetadataChangedFn document_metadata_changed,
+             DP_PaintEngineCursorMovedFn cursor_moved, void *user)
 {
-    DP_CanvasState *cs = apply_preview(pe, next);
-    pe->cs = cs;
-
     int prev_width = DP_canvas_state_width(prev);
     int prev_height = DP_canvas_state_height(prev);
     int width = DP_canvas_state_width(cs);
@@ -613,8 +613,6 @@ apply_changes(DP_PaintEngine *pe, DP_CanvasState *prev, DP_CanvasState *next,
         document_metadata_changed(user, dm);
     }
 
-    DP_canvas_state_decref(prev);
-
     int cursors_count = ucb->count;
     for (int i = 0; i < cursors_count; ++i) {
         DP_UserCursor *uc = &ucb->cursors[i];
@@ -641,32 +639,31 @@ void DP_paint_engine_tick(
         catchup(user, progress);
     }
 
-    DP_CanvasState *prev = pe->cs;
+    DP_CanvasState *prev_history_cs = pe->history_cs;
     DP_UserCursorBuffer *ucb = &pe->tick_buffer.cursors;
-    DP_CanvasState *next_or_null =
-        DP_canvas_history_compare_and_get(pe->ch, pe->cs, ucb);
+    DP_CanvasState *next_history_cs =
+        DP_canvas_history_compare_and_get(pe->ch, prev_history_cs, ucb);
+    if (next_history_cs) {
+        DP_canvas_state_decref(prev_history_cs);
+        pe->history_cs = next_history_cs;
+    }
 
-    DP_PaintEnginePreview *preview = DP_atomic_ptr_xch(&pe->next_preview, NULL);
-    if (preview) {
+    DP_PaintEnginePreview *next_preview =
+        DP_atomic_ptr_xch(&pe->next_preview, NULL);
+    if (next_preview) {
         free_preview(pe->preview);
-        pe->preview = preview == &null_preview ? NULL : preview;
+        pe->preview = next_preview == &null_preview ? NULL : next_preview;
     }
 
-    DP_CanvasState *next;
-    if (next_or_null) {
-        next = next_or_null;
+    if (next_history_cs || next_preview) {
+        DP_CanvasState *prev_view_cs = pe->view_cs;
+        DP_CanvasState *next_view_cs = apply_preview(pe, pe->history_cs);
+        pe->view_cs = next_view_cs;
+        emit_changes(pe, prev_view_cs, next_view_cs, ucb, resized, tile_changed,
+                     layer_props_changed, annotations_changed,
+                     document_metadata_changed, cursor_moved, user);
+        DP_canvas_state_decref(prev_view_cs);
     }
-    else if (preview) {
-        next = DP_canvas_state_incref(prev);
-    }
-    else {
-        return; // Nothing changed since the last tick.
-    }
-
-    // Sets pe->cs to the new canvas state and pe->preview_changed to false.
-    apply_changes(pe, prev, next, ucb, resized, tile_changed,
-                  layer_props_changed, annotations_changed,
-                  document_metadata_changed, cursor_moved, user);
 }
 
 void DP_paint_engine_prepare_render(DP_PaintEngine *pe,
@@ -675,7 +672,7 @@ void DP_paint_engine_prepare_render(DP_PaintEngine *pe,
 {
     DP_ASSERT(pe);
     DP_ASSERT(render_size);
-    DP_CanvasState *cs = pe->cs;
+    DP_CanvasState *cs = pe->view_cs;
     int width = DP_canvas_state_width(cs);
     int height = DP_canvas_state_height(cs);
     render_size(user, width, height);
@@ -696,7 +693,7 @@ static void render_pos(void *user, int x, int y)
     DP_PaintEngine *pe = params->pe;
     DP_TransientLayerContent *tlc = pe->tlc;
     DP_TransientTile *tt = DP_transient_layer_content_render_tile(
-        tlc, pe->cs, y * params->xtiles + x);
+        tlc, pe->view_cs, y * params->xtiles + x);
     DP_transient_tile_merge(tt, pe->checker, DP_BIT15, DP_BLEND_MODE_BEHIND);
 
     DP_Tile *t = DP_transient_layer_content_tile_at_noinc(tlc, x, y);
@@ -712,8 +709,8 @@ void DP_paint_engine_render(DP_PaintEngine *pe,
     DP_ASSERT(pe);
     DP_ASSERT(render_tile);
     struct DP_PaintEngineRenderParams params = {
-        pe, DP_tile_count_round(DP_canvas_state_width(pe->cs)), render_tile,
-        user};
+        pe, DP_tile_count_round(DP_canvas_state_width(pe->view_cs)),
+        render_tile, user};
     DP_canvas_diff_each_pos_reset(pe->diff, render_pos, &params);
 }
 
@@ -738,7 +735,7 @@ static void set_preview(DP_PaintEngine *pe, DP_PaintEnginePreview *preview,
     if (needs_draw_context && !pe->preview_dc) {
         pe->preview_dc = DP_draw_context_new();
     }
-    DP_CanvasState *cs = pe->cs;
+    DP_CanvasState *cs = pe->view_cs;
     preview->initial_offset_x = DP_canvas_state_offset_x(cs);
     preview->initial_offset_y = DP_canvas_state_offset_y(cs);
     preview->render = render;
@@ -805,12 +802,10 @@ static DP_CanvasState *cut_preview_render(DP_PaintEnginePreview *preview,
     DP_LayerRoutes *lr = DP_canvas_state_layer_routes_noinc(cs);
     DP_LayerRoutesEntry *lre = DP_layer_routes_search(lr, layer_id);
     if (!lre || DP_layer_routes_entry_is_group(lre)) {
-        return cs;
+        return DP_canvas_state_incref(cs);
     }
 
     DP_TransientCanvasState *tcs = DP_transient_canvas_state_new(cs);
-    DP_canvas_state_decref(cs);
-
     if (!pecp->lp) {
         DP_TransientLayerProps *tlp = DP_transient_layer_props_new_init(
             layer_id > 0 ? -layer_id : INT_MIN, false);
@@ -866,12 +861,10 @@ static DP_CanvasState *dabs_preview_render(DP_PaintEnginePreview *preview,
     DP_LayerRoutes *lr = DP_canvas_state_layer_routes_noinc(cs);
     DP_LayerRoutesEntry *lre = DP_layer_routes_search(lr, layer_id);
     if (!lre || DP_layer_routes_entry_is_group(lre)) {
-        return cs;
+        return DP_canvas_state_incref(cs);
     }
 
     DP_TransientCanvasState *tcs = DP_transient_canvas_state_new(cs);
-    DP_canvas_state_decref(cs);
-
     DP_TransientLayerContent *tlc =
         DP_layer_routes_entry_transient_content(lre, tcs);
     DP_TransientLayerContent *sub_tlc = NULL;
@@ -982,5 +975,5 @@ void DP_paint_engine_preview_clear(DP_PaintEngine *pe)
 DP_CanvasState *DP_paint_engine_canvas_state_inc(DP_PaintEngine *pe)
 {
     DP_ASSERT(pe);
-    return DP_canvas_state_incref(pe->cs);
+    return DP_canvas_state_incref(pe->view_cs);
 }

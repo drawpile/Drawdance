@@ -56,12 +56,16 @@ else()
         find_package(Qt5 COMPONENTS Core REQUIRED)
     endif()
 
+    if("${ZIP_IMPL}" STREQUAL "LIBZIP")
+        find_package(libzip REQUIRED)
+    elseif("${ZIP_IMPL}" STREQUAL "KARCHIVE")
+        find_package(KF5Archive REQUIRED)
+    endif()
+
     if(BUILD_APPS)
         find_package(SDL2 REQUIRED)
         find_package(CURL MODULE REQUIRED COMPONENTS HTTPS HTTP SSL)
     endif()
-
-    # find_package(libzip)
 
     find_package(Qt5 COMPONENTS Core Gui)
 endif()

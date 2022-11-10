@@ -84,6 +84,7 @@ preset_drawpile_debug() {
           -DUSE_ADDRESS_SANITIZER=ON \
           -DBUILD_APPS=OFF \
           -DTHREAD_IMPL=QT \
+          -DZIP_IMPL=KARCHIVE \
           -G Ninja \
           -B builddp
 }
@@ -96,6 +97,7 @@ preset_drawpile_relwithdebinfo() {
           -DUSE_STRICT_ALIASING=ON \
           -DBUILD_APPS=OFF \
           -DTHREAD_IMPL=QT \
+          -DZIP_IMPL=KARCHIVE \
           -G Ninja \
           -B builddprelwithdebinfo
 }
@@ -108,6 +110,7 @@ preset_drawpile_release() {
           -DUSE_STRICT_ALIASING=ON \
           -DBUILD_APPS=OFF \
           -DTHREAD_IMPL=QT \
+          -DZIP_IMPL=KARCHIVE \
           -G Ninja \
           -B builddprelease
 }
