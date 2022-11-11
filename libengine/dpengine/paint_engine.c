@@ -316,19 +316,21 @@ static void run_paint_engine(void *user)
 }
 
 
-DP_PaintEngine *DP_paint_engine_new(DP_AclState *acls,
-                                    DP_CanvasHistorySavePointFn save_point_fn,
-                                    void *save_point_user)
+DP_PaintEngine *
+DP_paint_engine_new_inc(DP_AclState *acls, DP_CanvasState *cs_or_null,
+                        DP_CanvasHistorySavePointFn save_point_fn,
+                        void *save_point_user)
 {
     DP_PaintEngine *pe = DP_malloc(sizeof(*pe));
     pe->acls = acls;
-    pe->ch = DP_canvas_history_new(save_point_fn, save_point_user);
+    pe->ch =
+        DP_canvas_history_new_inc(cs_or_null, save_point_fn, save_point_user);
     pe->diff = DP_canvas_diff_new();
     pe->tlc = DP_transient_layer_content_new_init(0, 0, NULL);
     pe->checker = DP_tile_new_checker(
         0, (DP_Pixel15){DP_BIT15 / 2, DP_BIT15 / 2, DP_BIT15 / 2, DP_BIT15},
         (DP_Pixel15){DP_BIT15, DP_BIT15, DP_BIT15, DP_BIT15});
-    pe->history_cs = DP_canvas_history_compare_and_get(pe->ch, NULL, NULL);
+    pe->history_cs = DP_canvas_state_new();
     pe->view_cs = DP_canvas_state_incref(pe->history_cs);
     pe->preview = NULL;
     pe->preview_dc = NULL;

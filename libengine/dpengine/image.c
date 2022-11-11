@@ -51,7 +51,14 @@ DP_Image *DP_image_new(int width, int height)
 }
 
 
-static DP_Image *read_image_guess(DP_Input *input)
+static void assign_type(DP_ImageFileType *out_type, DP_ImageFileType type)
+{
+    if (out_type) {
+        *out_type = type;
+    }
+}
+
+static DP_Image *read_image_guess(DP_Input *input, DP_ImageFileType *out_type)
 {
     unsigned char buf[8];
     bool error;
@@ -62,9 +69,11 @@ static DP_Image *read_image_guess(DP_Input *input)
 
     DP_Image *(*read_fn)(DP_Input *);
     if (DP_image_png_guess(buf, read)) {
+        assign_type(out_type, DP_IMAGE_FILE_TYPE_PNG);
         read_fn = DP_image_png_read;
     }
     else {
+        assign_type(out_type, DP_IMAGE_FILE_TYPE_UNKNOWN);
         DP_error_set("Could not guess image file format");
         return NULL;
     }
@@ -77,15 +86,18 @@ static DP_Image *read_image_guess(DP_Input *input)
     }
 }
 
-DP_Image *DP_image_new_from_file(DP_Input *input, DP_ImageFileType type)
+DP_Image *DP_image_new_from_file(DP_Input *input, DP_ImageFileType type,
+                                 DP_ImageFileType *out_type)
 {
     DP_ASSERT(input);
     switch (type) {
     case DP_IMAGE_FILE_TYPE_GUESS:
-        return read_image_guess(input);
+        return read_image_guess(input, out_type);
     case DP_IMAGE_FILE_TYPE_PNG:
+        assign_type(out_type, DP_IMAGE_FILE_TYPE_PNG);
         return DP_image_png_read(input);
     default:
+        assign_type(out_type, DP_IMAGE_FILE_TYPE_UNKNOWN);
         DP_error_set("Unknown image file type %d", (int)type);
         return NULL;
     }

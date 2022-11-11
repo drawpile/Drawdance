@@ -44,6 +44,11 @@ DP_CanvasHistory *
 DP_canvas_history_new(DP_CanvasHistorySavePointFn save_point_fn,
                       void *save_point_user);
 
+DP_CanvasHistory *
+DP_canvas_history_new_inc(DP_CanvasState *cs_or_null,
+                          DP_CanvasHistorySavePointFn save_point_fn,
+                          void *save_point_user);
+
 void DP_canvas_history_free(DP_CanvasHistory *ch);
 
 void DP_canvas_history_local_drawing_in_progress_set(

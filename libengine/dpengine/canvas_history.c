@@ -402,13 +402,22 @@ DP_CanvasHistory *
 DP_canvas_history_new(DP_CanvasHistorySavePointFn save_point_fn,
                       void *save_point_user)
 {
+    return DP_canvas_history_new_inc(NULL, save_point_fn, save_point_user);
+}
+
+DP_CanvasHistory *
+DP_canvas_history_new_inc(DP_CanvasState *cs_or_null,
+                          DP_CanvasHistorySavePointFn save_point_fn,
+                          void *save_point_user)
+{
     DP_Mutex *mutex = DP_mutex_new();
     if (!mutex) {
         return NULL;
     }
 
     DP_CanvasHistory *ch = DP_malloc(sizeof(*ch));
-    DP_CanvasState *cs = DP_canvas_state_new();
+    DP_CanvasState *cs =
+        cs_or_null ? DP_canvas_state_incref(cs_or_null) : DP_canvas_state_new();
     size_t entries_size = sizeof(*ch->entries) * INITIAL_CAPACITY;
 
     *ch = (DP_CanvasHistory){

@@ -33,13 +33,15 @@ typedef struct DP_Quad DP_Quad;
 typedef enum DP_ImageFileType {
     DP_IMAGE_FILE_TYPE_GUESS,
     DP_IMAGE_FILE_TYPE_PNG,
+    DP_IMAGE_FILE_TYPE_UNKNOWN = DP_IMAGE_FILE_TYPE_GUESS,
 } DP_ImageFileType;
 
 typedef struct DP_Image DP_Image;
 
 DP_Image *DP_image_new(int width, int height);
 
-DP_Image *DP_image_new_from_file(DP_Input *input, DP_ImageFileType type);
+DP_Image *DP_image_new_from_file(DP_Input *input, DP_ImageFileType type,
+                                 DP_ImageFileType *out_type);
 
 DP_Image *DP_image_new_from_compressed(int width, int height,
                                        const unsigned char *in, size_t in_size);
