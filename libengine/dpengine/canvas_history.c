@@ -28,6 +28,11 @@
 #include <dpcommon/threading.h>
 #include <dpmsg/message.h>
 #include <dpmsg/msg_internal.h>
+#ifdef DRAWDANCE_HISTORY_DUMP
+#    include <dpcommon/binary.h>
+#    include <dpcommon/output.h>
+#    include <time.h>
+#endif
 
 
 #define INITIAL_CAPACITY              1024
@@ -69,6 +74,13 @@ typedef struct DP_Cursor {
 } DP_Cursor;
 
 struct DP_CanvasHistory {
+#ifdef DRAWDANCE_HISTORY_DUMP
+    struct {
+        DP_Output *output;
+        size_t buffer_size;
+        unsigned char *buffer;
+    } dump;
+#endif
     DP_Mutex *mutex;
     DP_CanvasState *current_state;
     // User cursor changes are tracked in this perfect-hash-table-ish structure.
@@ -154,6 +166,89 @@ static void dump_history(DP_CanvasHistory *ch)
     HISTORY_DEBUG("--- end canvas history dump ---");
 }
 
+#endif
+
+
+#ifdef DRAWDANCE_HISTORY_DUMP
+
+#    define DUMP_TYPE_REMOTE_MESSAGE  0
+#    define DUMP_TYPE_LOCAL_MESSAGE   1
+#    define DUMP_TYPE_REMOTE_MULTIDAB 2
+#    define DUMP_TYPE_LOCAL_MULTIDAB  3
+
+static unsigned char *get_dump_buffer(void *user, size_t size)
+{
+    DP_CanvasHistory *ch = user;
+    if (ch->dump.buffer_size < size) {
+        ch->dump.buffer = DP_realloc(ch->dump.buffer, size);
+        ch->dump.buffer_size = size;
+    }
+    return ch->dump.buffer;
+}
+
+static bool write_dump_message(DP_CanvasHistory *ch, DP_Output *output,
+                               DP_Message *msg)
+{
+    size_t size = DP_message_serialize(msg, true, get_dump_buffer, ch);
+    unsigned char header[4];
+    DP_write_bigendian_uint32(DP_size_to_uint32(size), header);
+    return DP_output_write(output, header, sizeof(header))
+        && DP_output_write(output, ch->dump.buffer, size);
+}
+
+static bool try_dump_message(DP_CanvasHistory *ch, DP_Output *output,
+                             DP_Message *msg, bool local)
+{
+    unsigned char header[1] = {local ? DUMP_TYPE_LOCAL_MESSAGE
+                                     : DUMP_TYPE_REMOTE_MESSAGE};
+    return DP_output_write(output, header, sizeof(header))
+        && write_dump_message(ch, output, msg) && DP_output_flush(output);
+}
+
+static void close_dump_on_error(DP_CanvasHistory *ch, DP_Output *output)
+{
+    DP_warn("Dump error, closing it: %s", DP_error());
+    DP_output_free(output);
+    ch->dump.output = NULL;
+}
+
+static void dump_message(DP_CanvasHistory *ch, DP_Message *msg, bool local)
+{
+    DP_Output *output = ch->dump.output;
+    if (output && !try_dump_message(ch, output, msg, local)) {
+        close_dump_on_error(ch, output);
+    }
+}
+
+static bool try_dump_multidab(DP_CanvasHistory *ch, DP_Output *output,
+                              int count, DP_Message **msgs, bool local)
+{
+    unsigned char header[5];
+    header[0] = local ? DUMP_TYPE_LOCAL_MULTIDAB : DUMP_TYPE_REMOTE_MULTIDAB;
+    DP_write_bigendian_uint32(DP_int_to_uint32(count), header + 1);
+    if (!DP_output_write(output, header, sizeof(header))) {
+        return false;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (!write_dump_message(ch, output, msgs[i])) {
+            return false;
+        }
+    }
+    return DP_output_flush(output);
+}
+
+static void dump_multidab(DP_CanvasHistory *ch, int count, DP_Message **msgs,
+                          bool local)
+{
+    DP_Output *output = ch->dump.output;
+    if (output && !try_dump_multidab(ch, output, count, msgs, local)) {
+        close_dump_on_error(ch, output);
+    }
+}
+
+#else
+#    define dump_message(CH, MSG, LOCAL)          /* nothing */
+#    define dump_multidab(CH, COUNT, MSGS, LOCAL) /* nothing */
 #endif
 
 
@@ -316,17 +411,36 @@ DP_canvas_history_new(DP_CanvasHistorySavePointFn save_point_fn,
     DP_CanvasState *cs = DP_canvas_state_new();
     size_t entries_size = sizeof(*ch->entries) * INITIAL_CAPACITY;
 
-    *ch = (DP_CanvasHistory){mutex,
-                             cs,
-                             {0},
-                             0,
-                             INITIAL_CAPACITY,
-                             1,
-                             DP_malloc(entries_size),
-                             {0, 0, DP_QUEUE_NULL},
-                             {save_point_fn, save_point_user},
-                             {0, {0}},
-                             DP_ATOMIC_INIT(0)};
+    *ch = (DP_CanvasHistory){
+#ifdef DRAWDANCE_HISTORY_DUMP
+        {NULL, 0, NULL},
+#endif
+        mutex,
+        cs,
+        {0},
+        0,
+        INITIAL_CAPACITY,
+        1,
+        DP_malloc(entries_size),
+        {0, 0, DP_QUEUE_NULL},
+        {save_point_fn, save_point_user},
+        {0, {0}},
+        DP_ATOMIC_INIT(0),
+    };
+
+#ifdef DRAWDANCE_HISTORY_DUMP
+    // Let's put at least a little effort into avoiding path collisions.
+    char *dump_path = DP_format("%lu_%p.drawdancedump",
+                                (unsigned long)time(NULL), (void *)ch);
+    ch->dump.output = DP_file_output_new_from_path(dump_path);
+    if (ch->dump.output) {
+        DP_warn("Writing canvas history dump to '%s'", dump_path);
+    }
+    else {
+        DP_warn("Can't open dump file '%s': %s", dump_path, DP_error());
+    }
+    DP_free(dump_path);
+#endif
 
     DP_queue_init(&ch->fork.queue, INITIAL_CAPACITY, sizeof(DP_ForkEntry));
     set_initial_entry(ch, cs);
@@ -365,6 +479,10 @@ void DP_canvas_history_free(DP_CanvasHistory *ch)
         DP_free(ch->entries);
         DP_canvas_state_decref(ch->current_state);
         DP_mutex_free(ch->mutex);
+#ifdef DRAWDANCE_HISTORY_DUMP
+        DP_free(ch->dump.buffer);
+        DP_output_free(ch->dump.output);
+#endif
         DP_free(ch);
     }
 }
@@ -1000,6 +1118,7 @@ static DP_ForkAction reconcile_remote_command(DP_CanvasHistory *ch,
             shift_fork_entry_nodec(ch);
             DP_message_decref(peeked_msg);
             if (used == 1) {
+                HISTORY_DEBUG("Fork fallbehind cleared");
                 ch->fork.fallbehind = 0;
             }
             if (type == DP_MSG_UNDO || type == DP_MSG_UNDO_POINT) {
@@ -1011,19 +1130,18 @@ static DP_ForkAction reconcile_remote_command(DP_CanvasHistory *ch,
             }
         }
         else {
-            HISTORY_DEBUG(
-                "Rollback: fork got %d (%s) instead of %d (%s)",
-                (int)DP_message_type(peeked_msg),
-                DP_message_type_enum_name(DP_message_type(peeked_msg)),
-                (int)type, DP_message_type_enum_name(type));
+            DP_warn("Rollback: fork got %d (%s) instead of %d (%s)",
+                    (int)DP_message_type(peeked_msg),
+                    DP_message_type_enum_name(DP_message_type(peeked_msg)),
+                    (int)type, DP_message_type_enum_name(type));
             ch->fork.fallbehind = 0;
             clear_fork_entries(ch);
             return DP_FORK_ACTION_ROLLBACK;
         }
     }
     else if (++ch->fork.fallbehind >= MAX_FALLBEHIND) {
-        HISTORY_DEBUG("Rollback: fork fallbehind %d >= max fallbehind %d",
-                      ch->fork.fallbehind, MAX_FALLBEHIND);
+        DP_warn("Rollback: fork fallbehind %d >= max fallbehind %d",
+                ch->fork.fallbehind, MAX_FALLBEHIND);
         ch->fork.fallbehind = 0;
         clear_fork_entries(ch);
         return DP_FORK_ACTION_ROLLBACK;
@@ -1032,11 +1150,11 @@ static DP_ForkAction reconcile_remote_command(DP_CanvasHistory *ch,
         return DP_FORK_ACTION_CONCURRENT;
     }
     else {
-        HISTORY_DEBUG("Rollback: non-concurrent fork");
+        DP_warn("Rollback: non-concurrent fork");
         // Avoid a rollback storm by clearing the local fork, but not when
         // drawing is in progress, since that would cause a feedback loop.
         if (DP_canvas_history_local_drawing_in_progress(ch)) {
-            HISTORY_DEBUG("Local drawing in progress, not clearing fork");
+            DP_warn("Local drawing in progress, not clearing fork");
         }
         else {
             clear_fork_entries(ch);
@@ -1072,6 +1190,11 @@ bool DP_canvas_history_handle(DP_CanvasHistory *ch, DP_DrawContext *dc,
 {
     DP_ASSERT(ch);
     DP_ASSERT(msg);
+    HISTORY_DEBUG("Handle remote %s command from user %u",
+                  DP_message_type_enum_name_unprefixed(DP_message_type(msg)),
+                  DP_message_context_id(msg));
+    dump_message(ch, msg, false);
+
     DP_MessageType type = DP_message_type(msg);
     bool ok = type == DP_MSG_INTERNAL
                 ? handle_internal(ch, DP_msg_internal_cast(msg))
@@ -1089,6 +1212,7 @@ bool DP_canvas_history_handle_local(DP_CanvasHistory *ch, DP_DrawContext *dc,
     HISTORY_DEBUG("Handle local %s command from user %u",
                   DP_message_type_enum_name_unprefixed(DP_message_type(msg)),
                   DP_message_context_id(msg));
+    dump_message(ch, msg, true);
 
     if (!have_local_fork(ch)) {
         set_fork_start(ch);
@@ -1111,6 +1235,7 @@ void DP_canvas_history_handle_multidab_dec(DP_CanvasHistory *ch,
     DP_ASSERT(ch);
     DP_ASSERT(count > 1);
     DP_ASSERT(msgs);
+    dump_multidab(ch, count, msgs, false);
 
     int offset = 0;
     for (int i = 0; i < count; ++i) {
@@ -1158,6 +1283,7 @@ void DP_canvas_history_handle_local_multidab_dec(DP_CanvasHistory *ch,
     DP_ASSERT(ch);
     DP_ASSERT(count > 0);
     DP_ASSERT(msgs);
+    dump_multidab(ch, count, msgs, true);
 
     if (!have_local_fork(ch)) {
         set_fork_start(ch);

@@ -126,6 +126,10 @@ target_include_directories(dpengine INTERFACE "${CMAKE_CURRENT_LIST_DIR}")
 target_link_libraries(dpengine PUBLIC dpengine_archive dpmsg_interface uthash
                                       mypaint PNG::PNG qgrayraster)
 
+if(ENABLE_HISTORY_DUMP)
+    target_compile_definitions(dpengine PRIVATE DRAWDANCE_HISTORY_DUMP)
+endif()
+
 if(BUILD_TESTS)
     add_library(dptest_engine STATIC "${dptest_engine_sources}"
                                      "${dptest_engine_headers}")
