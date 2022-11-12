@@ -144,6 +144,9 @@ int DP_canvas_state_search_change_bounds(DP_CanvasState *cs,
 
 int DP_canvas_state_pick_layer(DP_CanvasState *cs, int x, int y);
 
+DP_TransientLayerContent *DP_canvas_state_to_flat_layer(DP_CanvasState *cs,
+                                                        unsigned int flags);
+
 DP_Image *DP_canvas_state_to_flat_image(DP_CanvasState *cs, unsigned int flags);
 
 DP_TransientTile *DP_canvas_state_flatten_tile(DP_CanvasState *cs,

@@ -31,6 +31,7 @@ set(dpengine_sources
     dpengine/compress.c
     dpengine/document_metadata.c
     dpengine/draw_context.c
+    dpengine/flood_fill.c
     dpengine/frame.c
     dpengine/image.c
     dpengine/image_png.c
@@ -65,6 +66,7 @@ set(dpengine_headers
     dpengine/compress.h
     dpengine/document_metadata.h
     dpengine/draw_context.h
+    dpengine/flood_fill.h
     dpengine/frame.h
     dpengine/image.h
     dpengine/image_png.h

@@ -1046,32 +1046,37 @@ int DP_canvas_state_pick_layer(DP_CanvasState *cs, int x, int y)
 }
 
 
+DP_TransientLayerContent *DP_canvas_state_to_flat_layer(DP_CanvasState *cs,
+                                                        unsigned int flags)
+{
+    DP_ASSERT(cs);
+    DP_ASSERT(DP_atomic_get(&cs->refcount) > 0);
+    // Create a layer to flatten the image into. Start by filling it with the
+    // background tile if requested, otherwise leave it transparent.
+    bool include_background = flags & DP_FLAT_IMAGE_INCLUDE_BACKGROUND;
+    DP_Tile *background_tile = include_background ? cs->background_tile : NULL;
+    DP_TransientLayerContent *tlc = DP_transient_layer_content_new_init(
+        cs->width, cs->height, background_tile);
+    // Merge the other layers into the flattening layer.
+    bool include_sublayers = flags & DP_FLAT_IMAGE_INCLUDE_SUBLAYERS;
+    DP_layer_list_merge_to_flat_image(cs->layers, cs->layer_props, tlc,
+                                      DP_BIT15, include_sublayers);
+    return tlc;
+}
+
 DP_Image *DP_canvas_state_to_flat_image(DP_CanvasState *cs, unsigned int flags)
 {
     DP_ASSERT(cs);
+    DP_ASSERT(DP_atomic_get(&cs->refcount) > 0);
     int width = cs->width;
     int height = cs->height;
     if (width <= 0 || height <= 0) {
         DP_error_set("Can't create a flat image with zero pixels");
         return NULL;
     }
-
-    // Create a layer to flatten the image into. Start by filling it with the
-    // background tile if requested, otherwise leave it transparent.
-    bool include_background = flags & DP_FLAT_IMAGE_INCLUDE_BACKGROUND;
-    DP_Tile *background_tile = include_background ? cs->background_tile : NULL;
-    DP_TransientLayerContent *tlc =
-        DP_transient_layer_content_new_init(width, height, background_tile);
-
-    // Merge the other layers into the flattening layer.
-    bool include_sublayers = flags & DP_FLAT_IMAGE_INCLUDE_SUBLAYERS;
-    DP_layer_list_merge_to_flat_image(cs->layers, cs->layer_props, tlc,
-                                      DP_BIT15, include_sublayers);
-
-    // Write it all to an image and toss the flattening layer.
-    DP_LayerContent *lc = DP_transient_layer_content_persist(tlc);
-    DP_Image *img = DP_layer_content_to_image(lc);
-    DP_layer_content_decref(lc);
+    DP_TransientLayerContent *tlc = DP_canvas_state_to_flat_layer(cs, flags);
+    DP_Image *img = DP_layer_content_to_image((DP_LayerContent *)tlc);
+    DP_transient_layer_content_decref(tlc);
     return img;
 }
 
