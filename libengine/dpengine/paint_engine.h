@@ -55,6 +55,9 @@ DP_paint_engine_render_content_noinc(DP_PaintEngine *pe);
 void DP_paint_engine_local_drawing_in_progress_set(
     DP_PaintEngine *pe, bool local_drawing_in_progress);
 
+void DP_paint_engine_layer_visibility_set(DP_PaintEngine *pe, int layer_id,
+                                          bool hidden);
+
 // Returns the number of drawing commands actually pushed to the paint engine.
 int DP_paint_engine_handle_inc(
     DP_PaintEngine *pe, bool local, int count, DP_Message **msgs,

@@ -214,6 +214,9 @@ DP_TransientLayerPropsList *
 DP_transient_canvas_state_transient_layer_props(DP_TransientCanvasState *tcs,
                                                 int reserve);
 
+void DP_transient_canvas_state_layer_props_set_inc(DP_TransientCanvasState *tcs,
+                                                   DP_LayerPropsList *lpl);
+
 DP_TransientAnnotationList *
 DP_transient_canvas_state_transient_annotations(DP_TransientCanvasState *tcs,
                                                 int reserve);

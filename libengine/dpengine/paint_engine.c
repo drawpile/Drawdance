@@ -5,6 +5,7 @@
 #include "draw_context.h"
 #include "layer_content.h"
 #include "layer_props.h"
+#include "layer_props_list.h"
 #include "layer_routes.h"
 #include "paint.h"
 #include "tile.h"
@@ -21,7 +22,7 @@
 #include <limits.h>
 
 
-#define INITIAL_CAPACITY 64
+#define INITIAL_QUEUE_CAPACITY 64
 
 typedef struct DP_PaintEnginePreview DP_PaintEnginePreview;
 typedef DP_CanvasState *(*DP_PaintEnginePreviewRenderFn)(
@@ -86,6 +87,13 @@ struct DP_PaintEngine {
     DP_Tile *checker;
     DP_CanvasState *history_cs;
     DP_CanvasState *view_cs;
+    struct {
+        int used;
+        int capacity;
+        int *layer_ids;
+        DP_LayerPropsList *prev_lpl;
+        DP_LayerPropsList *lpl;
+    } hidden_layers;
     DP_PaintEnginePreview *preview;
     DP_DrawContext *preview_dc;
     DP_Queue local_queue;
@@ -332,10 +340,15 @@ DP_paint_engine_new_inc(DP_AclState *acls, DP_CanvasState *cs_or_null,
         (DP_Pixel15){DP_BIT15, DP_BIT15, DP_BIT15, DP_BIT15});
     pe->history_cs = DP_canvas_state_new();
     pe->view_cs = DP_canvas_state_incref(pe->history_cs);
+    pe->hidden_layers.used = 0;
+    pe->hidden_layers.capacity = 0;
+    pe->hidden_layers.layer_ids = NULL;
+    pe->hidden_layers.prev_lpl = NULL;
+    pe->hidden_layers.lpl = NULL;
     pe->preview = NULL;
     pe->preview_dc = NULL;
-    DP_message_queue_init(&pe->local_queue, INITIAL_CAPACITY);
-    DP_message_queue_init(&pe->remote_queue, INITIAL_CAPACITY);
+    DP_message_queue_init(&pe->local_queue, INITIAL_QUEUE_CAPACITY);
+    DP_message_queue_init(&pe->remote_queue, INITIAL_QUEUE_CAPACITY);
     pe->queue_sem = DP_semaphore_new(0);
     pe->queue_mutex = DP_mutex_new();
     DP_atomic_set(&pe->running, true);
@@ -368,6 +381,9 @@ void DP_paint_engine_free_join(DP_PaintEngine *pe)
         DP_message_queue_dispose(&pe->local_queue);
         DP_draw_context_free(pe->preview_dc);
         free_preview(pe->preview);
+        DP_layer_props_list_decref_nullable(pe->hidden_layers.lpl);
+        DP_layer_props_list_decref_nullable(pe->hidden_layers.prev_lpl);
+        DP_free(pe->hidden_layers.layer_ids);
         DP_canvas_state_decref_nullable(pe->history_cs);
         DP_canvas_state_decref_nullable(pe->view_cs);
         DP_tile_decref(pe->checker);
@@ -391,6 +407,57 @@ void DP_paint_engine_local_drawing_in_progress_set(
     DP_ASSERT(pe);
     DP_canvas_history_local_drawing_in_progress_set(pe->ch,
                                                     local_drawing_in_progress);
+}
+
+
+static int search_hidden_layer_index(DP_PaintEngine *pe, int layer_id)
+{
+    int used = pe->hidden_layers.used;
+    for (int i = 0; i < used; ++i) {
+        if (pe->hidden_layers.layer_ids[i] == layer_id) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void insert_hidden_layer(DP_PaintEngine *pe, int layer_id)
+{
+    int used = pe->hidden_layers.used++;
+    int capacity = pe->hidden_layers.capacity;
+    if (used == capacity) {
+        int new_capacity = DP_max_int(8, capacity * 2);
+        pe->hidden_layers.layer_ids =
+            DP_realloc(pe->hidden_layers.layer_ids,
+                       DP_int_to_size(new_capacity)
+                           * sizeof(*pe->hidden_layers.layer_ids));
+    }
+    pe->hidden_layers.layer_ids[used] = layer_id;
+}
+
+static void remove_hidden_layer(DP_PaintEngine *pe, int index)
+{
+    int *layer_ids = pe->hidden_layers.layer_ids;
+    int used = --pe->hidden_layers.used;
+    memmove(layer_ids + index, layer_ids + index + 1,
+            sizeof(*layer_ids) * DP_int_to_size(used - index));
+}
+
+void DP_paint_engine_layer_visibility_set(DP_PaintEngine *pe, int layer_id,
+                                          bool hidden)
+{
+    DP_ASSERT(pe);
+    int index = search_hidden_layer_index(pe, layer_id);
+    if (hidden && index == -1) {
+        insert_hidden_layer(pe, layer_id);
+        DP_layer_props_list_decref_nullable(pe->hidden_layers.prev_lpl);
+        pe->hidden_layers.prev_lpl = NULL;
+    }
+    else if (!hidden && index != -1) {
+        remove_hidden_layer(pe, index);
+        DP_layer_props_list_decref_nullable(pe->hidden_layers.prev_lpl);
+        pe->hidden_layers.prev_lpl = NULL;
+    }
 }
 
 
@@ -577,6 +644,90 @@ static DP_CanvasState *apply_preview(DP_PaintEngine *pe, DP_CanvasState *cs)
     }
 }
 
+static DP_TransientCanvasState *
+get_or_make_transient_canvas_state(DP_CanvasState *cs)
+{
+    if (DP_canvas_state_transient(cs)) {
+        return (DP_TransientCanvasState *)cs;
+    }
+    else {
+        DP_TransientCanvasState *tcs = DP_transient_canvas_state_new(cs);
+        DP_canvas_state_decref(cs);
+        return tcs;
+    }
+}
+
+static DP_CanvasState *set_hidden_layer_props(DP_PaintEngine *pe,
+                                              DP_CanvasState *cs)
+{
+    int *layer_ids = pe->hidden_layers.layer_ids;
+    DP_LayerRoutes *lr = DP_canvas_state_layer_routes_noinc(cs);
+    // There might be stale hidden layers to remove along the way, don't make
+    // the canvas state transient until we actually find something to do.
+    DP_TransientCanvasState *tcs = NULL;
+    // Using a while loop since we might purge elements along the way.
+    int i = 0;
+    int used = pe->hidden_layers.used;
+    while (i < used) {
+        int layer_id = layer_ids[i];
+        DP_LayerRoutesEntry *lre = DP_layer_routes_search(lr, layer_id);
+        if (lre) {
+            if (!tcs) {
+                tcs = get_or_make_transient_canvas_state(cs);
+            }
+            DP_TransientLayerProps *tlp =
+                DP_layer_routes_entry_transient_props(lre, tcs);
+            DP_transient_layer_props_hidden_set(tlp, true);
+            ++i;
+        }
+        else {
+            remove_hidden_layer(pe, i);
+            --used;
+        }
+    }
+    // We remember the root layer props list for later and then jam it into
+    // subsequent canvas states. That'll make them diff correctly instead of
+    // reporting a layer props change on every tick.
+    if (tcs) {
+        DP_layer_props_list_decref_nullable(pe->hidden_layers.lpl);
+        pe->hidden_layers.lpl =
+            DP_layer_props_list_incref(DP_transient_layer_props_list_persist(
+                DP_transient_canvas_state_transient_layer_props(tcs, 0)));
+        return (DP_CanvasState *)tcs;
+    }
+    else {
+        return cs;
+    }
+}
+
+static DP_CanvasState *apply_hidden_layers(DP_PaintEngine *pe,
+                                           DP_CanvasState *cs)
+{
+    DP_LayerPropsList *lpl = DP_canvas_state_layer_props_noinc(cs);
+    // This function here may replace the layer props entirely, so there can't
+    // have been any meddling with it beforehand. Any layer props changes must
+    // be part of this function so that they're cached properly.
+    DP_ASSERT(!DP_layer_props_list_transient(lpl));
+    DP_LayerPropsList *prev_lpl = pe->hidden_layers.prev_lpl;
+    if (lpl == prev_lpl) {
+        if (pe->hidden_layers.used == 0) {
+            return cs;
+        }
+        else {
+            DP_TransientCanvasState *tcs =
+                get_or_make_transient_canvas_state(cs);
+            DP_transient_canvas_state_layer_props_set_inc(
+                tcs, pe->hidden_layers.lpl);
+            return (DP_CanvasState *)tcs;
+        }
+    }
+    else {
+        DP_layer_props_list_decref_nullable(prev_lpl);
+        pe->hidden_layers.prev_lpl = DP_layer_props_list_incref(lpl);
+        return set_hidden_layer_props(pe, cs);
+    }
+}
+
 static void
 emit_changes(DP_PaintEngine *pe, DP_CanvasState *prev, DP_CanvasState *cs,
              DP_UserCursorBuffer *ucb, DP_PaintEngineResizedFn resized,
@@ -657,9 +808,14 @@ void DP_paint_engine_tick(
         pe->preview = next_preview == &null_preview ? NULL : next_preview;
     }
 
-    if (next_history_cs || next_preview) {
+    bool hidden_layers_changed = !pe->hidden_layers.prev_lpl;
+
+    if (next_history_cs || next_preview || hidden_layers_changed) {
+        // Previews and hidden layers are local changes, so we have to apply
+        // them on top of the canvas state we got out of the history.
         DP_CanvasState *prev_view_cs = pe->view_cs;
-        DP_CanvasState *next_view_cs = apply_preview(pe, pe->history_cs);
+        DP_CanvasState *next_view_cs =
+            apply_hidden_layers(pe, apply_preview(pe, pe->history_cs));
         pe->view_cs = next_view_cs;
         emit_changes(pe, prev_view_cs, next_view_cs, ucb, resized, tile_changed,
                      layer_props_changed, annotations_changed,
@@ -819,7 +975,7 @@ static DP_CanvasState *cut_preview_render(DP_PaintEnginePreview *preview,
         DP_layer_routes_entry_transient_content(lre, tcs);
     DP_transient_layer_content_sublayer_insert_inc(
         tlc, get_cut_preview_content(pecp, cs, offset_x, offset_y), pecp->lp);
-    return DP_transient_canvas_state_persist(tcs);
+    return (DP_CanvasState *)tcs;
 }
 
 static void cut_preview_dispose(DP_PaintEnginePreview *preview)
@@ -937,7 +1093,7 @@ static DP_CanvasState *dabs_preview_render(DP_PaintEnginePreview *preview,
         DP_paint_draw_dabs(dc, &params, params.indirect ? sub_tlc : tlc);
     }
 
-    return DP_transient_canvas_state_persist(tcs);
+    return (DP_CanvasState *)tcs;
 }
 
 static void dabs_preview_dispose(DP_PaintEnginePreview *preview)

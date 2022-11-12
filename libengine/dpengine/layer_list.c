@@ -386,7 +386,6 @@ DP_TransientTile *DP_layer_list_flatten_tile_to(DP_LayerList *ll,
 {
     DP_ASSERT(ll);
     DP_ASSERT(DP_atomic_get(&ll->refcount) > 0);
-    DP_ASSERT(!ll->transient);
     DP_ASSERT(lpl);
     DP_ASSERT(DP_layer_props_list_refcount(lpl) > 0);
     DP_ASSERT(ll->count == DP_layer_props_list_count(lpl));
