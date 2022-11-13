@@ -32,7 +32,7 @@ static void assign_load_result(DP_LoadResult *out_result, DP_LoadResult result)
 }
 
 
-DP_CanvasState *load_flat_image(DP_Input *input,
+DP_CanvasState *load_flat_image(DP_DrawContext *dc, DP_Input *input,
                                 const char *flat_image_layer_title,
                                 DP_LoadResult *out_result)
 {
@@ -75,17 +75,15 @@ DP_CanvasState *load_flat_image(DP_Input *input,
         DP_transient_canvas_state_transient_layer_props(tcs, 1);
     DP_transient_layer_props_list_insert_transient_noinc(tlpl, tlp, 0);
 
-    // TODO this pointlessly allocates a bunch of memory for brush masks.
-    DP_DrawContext *dc = DP_draw_context_new();
     DP_transient_canvas_state_layer_routes_reindex(tcs, dc);
-    DP_draw_context_free(dc);
 
     assign_load_result(out_result, DP_LOAD_RESULT_SUCCESS);
     return DP_transient_canvas_state_persist(tcs);
 }
 
 
-DP_CanvasState *DP_load(const char *path, const char *flat_image_layer_title,
+DP_CanvasState *DP_load(DP_DrawContext *dc, const char *path,
+                        const char *flat_image_layer_title,
                         DP_LoadResult *out_result)
 {
     if (!path) {
@@ -100,7 +98,7 @@ DP_CanvasState *DP_load(const char *path, const char *flat_image_layer_title,
     }
 
     DP_CanvasState *cs =
-        load_flat_image(input, flat_image_layer_title, out_result);
+        load_flat_image(dc, input, flat_image_layer_title, out_result);
 
     DP_input_free(input);
     return cs;

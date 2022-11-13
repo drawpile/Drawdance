@@ -8,10 +8,10 @@
 #include <dpcommon/common.h>
 #include <dpcommon/conversions.h>
 #include <dpmsg/message.h>
-#include <helpers.h> // RGB <-> HSV conversion, CLAMP, mod_arith
 #include <math.h>
 #include <mypaint-brush.h>
 #include <mypaint.h>
+#include <helpers.h> // RGB <-> HSV conversion, CLAMP, mod_arith
 
 
 // Same amount of smudge buckets that MyPaint uses.
@@ -152,17 +152,11 @@ static uint8_t get_uint8(float input)
 }
 
 
-static uint8_t get_pixel_dab_size(DP_ClassicBrush *cb, float pressure)
-{
-    float value = DP_classic_brush_size_at(cb, pressure) + 0.5f;
-    return DP_float_to_uint8(CLAMP(value, 1.0f, UINT8_MAX));
-}
-
 static void add_dab_pixel(DP_BrushEngine *be, DP_ClassicBrush *cb, int x, int y,
                           float pressure)
 {
-    uint8_t dab_size = get_pixel_dab_size(cb, pressure);
-    uint8_t dab_opacity = get_uint8(DP_classic_brush_opacity_at(cb, pressure));
+    uint8_t dab_size = DP_classic_brush_pixel_dab_size_at(cb, pressure);
+    uint8_t dab_opacity = DP_classic_brush_dab_opacity_at(cb, pressure);
     if (dab_size > 0 && dab_opacity > 0) {
         int32_t dab_x = DP_int_to_int32(x);
         int32_t dab_y = DP_int_to_int32(y);
@@ -192,19 +186,13 @@ static void add_dab_pixel(DP_BrushEngine *be, DP_ClassicBrush *cb, int x, int y,
 }
 
 
-static uint16_t get_soft_dab_size(float radius)
-{
-    float value = radius * 256.0f + 0.5f;
-    return DP_float_to_uint16(CLAMP(value, 0, UINT16_MAX));
-}
-
 static void add_dab_soft(DP_BrushEngine *be, DP_ClassicBrush *cb, float x,
                          float y, float pressure)
 {
-    float radius = DP_classic_brush_size_at(cb, pressure);
-    uint8_t dab_opacity = get_uint8(DP_classic_brush_opacity_at(cb, pressure));
-    // Disregard infinitesimal or fully opaque dabs.
-    if (radius >= 0.1f && dab_opacity > 0) {
+    uint16_t dab_size = DP_classic_brush_soft_dab_size_at(cb, pressure);
+    uint8_t dab_opacity = DP_classic_brush_dab_opacity_at(cb, pressure);
+    // Disregard infinitesimal or fully opaque dabs. 26 is a radius of 0.1.
+    if (dab_size >= 26 && dab_opacity > 0) {
         int32_t dab_x = DP_float_to_int32(x * 4.0f);
         int32_t dab_y = DP_float_to_int32(y * 4.0f);
         uint32_t dab_color = combine_upixel_float(be->classic.smudge_color);
@@ -228,8 +216,8 @@ static void add_dab_soft(DP_BrushEngine *be, DP_ClassicBrush *cb, float x,
 
         DP_BrushEngineClassicDab *dabs = get_dab_buffer(be, sizeof(*dabs));
         dabs[be->dabs.used++] = (DP_BrushEngineClassicDab){
-            dx, dy, get_soft_dab_size(radius),
-            get_uint8(DP_classic_brush_hardness_at(cb, pressure)), dab_opacity};
+            dx, dy, dab_size, DP_classic_brush_dab_hardness_at(cb, pressure),
+            dab_opacity};
     }
 }
 
@@ -413,7 +401,7 @@ void DP_brush_engine_free(DP_BrushEngine *be)
 
 void DP_brush_engine_classic_brush_set(DP_BrushEngine *be,
                                        const DP_ClassicBrush *brush,
-                                       int layer_id)
+                                       int layer_id, DP_UPixelFloat color)
 {
     DP_ASSERT(be);
     DP_ASSERT(brush);
@@ -434,7 +422,6 @@ void DP_brush_engine_classic_brush_set(DP_BrushEngine *be,
 
     be->classic.brush = *brush;
     DP_ClassicBrush *cb = &be->classic.brush;
-    DP_UPixelFloat color = cb->color;
     if (cb->incremental || cb->smudge.max > 0.0f) {
         // Incremental mode must be used when smudging, because color is not
         // picked up from sublayers
@@ -458,7 +445,8 @@ void DP_brush_engine_classic_brush_set(DP_BrushEngine *be,
 void DP_brush_engine_mypaint_brush_set(DP_BrushEngine *be,
                                        const DP_MyPaintBrush *brush,
                                        const DP_MyPaintSettings *settings,
-                                       int layer_id, bool freehand)
+                                       int layer_id, bool freehand,
+                                       DP_UPixelFloat color)
 {
     DP_ASSERT(be);
     DP_ASSERT(brush);
@@ -483,9 +471,9 @@ void DP_brush_engine_mypaint_brush_set(DP_BrushEngine *be,
         }
     }
 
-    float r_h = brush->color.r;
-    float g_s = brush->color.g;
-    float b_v = brush->color.b;
+    float r_h = color.r;
+    float g_s = color.g;
+    float b_v = color.b;
     rgb_to_hsv_float(&r_h, &g_s, &b_v);
     mypaint_brush_set_base_value(mb, MYPAINT_BRUSH_SETTING_COLOR_H, r_h);
     mypaint_brush_set_base_value(mb, MYPAINT_BRUSH_SETTING_COLOR_S, g_s);
@@ -598,13 +586,14 @@ void DP_brush_engine_dabs_flush(DP_BrushEngine *be)
 }
 
 
-void DP_brush_engine_stroke_begin(DP_BrushEngine *be, unsigned int context_id)
+void DP_brush_engine_stroke_begin(DP_BrushEngine *be, unsigned int context_id,
+                                  bool push_undo_point)
 {
     DP_ASSERT(be);
     DP_ASSERT(!be->in_progress);
     DP_ASSERT(be->dabs.used == 0);
     be->context_id = context_id;
-    if (context_id != 0) {
+    if (push_undo_point) {
         be->push_message(be->user, DP_msg_undo_point_new(context_id));
     }
 }
@@ -864,7 +853,7 @@ void DP_brush_engine_stroke_to(DP_BrushEngine *be, float x, float y,
     }
 }
 
-void DP_brush_engine_stroke_end(DP_BrushEngine *be)
+void DP_brush_engine_stroke_end(DP_BrushEngine *be, bool push_pen_up)
 {
     DP_ASSERT(be);
     DP_layer_content_decref_nullable(be->lc);
@@ -873,8 +862,7 @@ void DP_brush_engine_stroke_end(DP_BrushEngine *be)
 
     DP_brush_engine_dabs_flush(be);
 
-    unsigned int context_id = be->context_id;
-    if (context_id != 0) {
+    if (push_pen_up) {
         be->push_message(be->user, DP_msg_pen_up_new(be->context_id));
     }
     be->in_progress = false;

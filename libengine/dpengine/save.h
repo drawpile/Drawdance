@@ -3,6 +3,7 @@
 #include <dpcommon/common.h>
 
 typedef struct DP_CanvasState DP_CanvasState;
+typedef struct DP_DrawContext DP_DrawContext;
 
 
 typedef struct DP_SaveFormat {
@@ -24,7 +25,7 @@ typedef enum DP_SaveResult {
     DP_SAVE_RESULT_WRITE_ERROR,
 } DP_SaveResult;
 
-DP_SaveResult DP_save(DP_CanvasState *cs, const char *path);
+DP_SaveResult DP_save(DP_CanvasState *cs, DP_DrawContext *dc, const char *path);
 
 
 #endif

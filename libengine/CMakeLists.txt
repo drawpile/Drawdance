@@ -24,7 +24,7 @@ set(dpengine_sources
     dpengine/annotation_list.c
     dpengine/brush.c
     dpengine/brush_engine.c
-    # dpengine/brush_preview.c
+    dpengine/brush_preview.c
     dpengine/canvas_diff.c
     dpengine/canvas_history.c
     dpengine/canvas_state.c

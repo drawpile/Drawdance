@@ -112,6 +112,30 @@ DP_INLINE int DP_rect_y(DP_Rect rect)
     return rect.y1;
 }
 
+DP_INLINE int DP_rect_left(DP_Rect rect)
+{
+    DP_ASSERT(DP_rect_valid(rect));
+    return rect.x1;
+}
+
+DP_INLINE int DP_rect_top(DP_Rect rect)
+{
+    DP_ASSERT(DP_rect_valid(rect));
+    return rect.y1;
+}
+
+DP_INLINE int DP_rect_right(DP_Rect rect)
+{
+    DP_ASSERT(DP_rect_valid(rect));
+    return rect.x2;
+}
+
+DP_INLINE int DP_rect_bottom(DP_Rect rect)
+{
+    DP_ASSERT(DP_rect_valid(rect));
+    return rect.y2;
+}
+
 DP_INLINE int DP_rect_width(DP_Rect rect)
 {
     DP_ASSERT(DP_rect_valid(rect));

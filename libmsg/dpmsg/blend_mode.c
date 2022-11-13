@@ -273,6 +273,11 @@ const char *DP_blend_mode_svg_name(int blend_mode)
     return get_attributes(blend_mode)->svg_name;
 }
 
+bool DP_blend_mode_can_increase_opacity(int blend_mode)
+{
+    return get_attributes(blend_mode)->flags & INCREASE_OPACITY;
+}
+
 DP_BlendModeBlankTileBehavior DP_blend_mode_blank_tile_behavior(int blend_mode)
 {
     return get_attributes(blend_mode)->flags & BLEND_BLANK

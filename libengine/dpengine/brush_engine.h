@@ -1,5 +1,6 @@
 #ifndef DPENGINE_BRUSHENGINE_H
 #define DPENGINE_BRUSHENGINE_H
+#include "pixels.h"
 #include <dpcommon/common.h>
 
 typedef struct DP_CanvasState DP_CanvasState;
@@ -20,25 +21,27 @@ void DP_brush_engine_free(DP_BrushEngine *be);
 
 void DP_brush_engine_classic_brush_set(DP_BrushEngine *be,
                                        const DP_ClassicBrush *brush,
-                                       int layer_id);
+                                       int layer_id, DP_UPixelFloat color);
 
 void DP_brush_engine_mypaint_brush_set(DP_BrushEngine *be,
                                        const DP_MyPaintBrush *brush,
                                        const DP_MyPaintSettings *settings,
-                                       int layer_id, bool freehand);
+                                       int layer_id, bool freehand,
+                                       DP_UPixelFloat color);
 
 void DP_brush_engine_dabs_flush(DP_BrushEngine *be);
 
-// Sets the context id for this stroke and pushes an undo point message.
-void DP_brush_engine_stroke_begin(DP_BrushEngine *be, unsigned int context_id);
+// Sets the context id for this stroke, optionally pushes an undo point message.
+void DP_brush_engine_stroke_begin(DP_BrushEngine *be, unsigned int context_id,
+                                  bool push_undo_point);
 
 // Pushes draw dabs messages.
 void DP_brush_engine_stroke_to(DP_BrushEngine *be, float x, float y,
                                float pressure, long long delta_msec,
                                DP_CanvasState *cs_or_null);
 
-// Pushes a pen up message.
-void DP_brush_engine_stroke_end(DP_BrushEngine *be);
+// Finishes a stroke, optionally pushes a pen up message.
+void DP_brush_engine_stroke_end(DP_BrushEngine *be, bool push_pen_up);
 
 void DP_brush_engine_offset_add(DP_BrushEngine *be, float x, float y);
 

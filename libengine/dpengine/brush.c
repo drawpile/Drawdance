@@ -1,5 +1,7 @@
 #include "brush.h"
 #include <dpcommon/common.h>
+#include <dpcommon/conversions.h>
+#include <helpers.h> // CLAMP
 
 
 static float lerp_range(const DP_ClassicBrushRange *cbr, float pressure)
@@ -52,4 +54,33 @@ float DP_classic_brush_smudge_at(const DP_ClassicBrush *cb, float pressure)
     DP_ASSERT(pressure >= 0.0f);
     DP_ASSERT(pressure <= 1.0f);
     return lerp_range_if(&cb->smudge, pressure, cb->smudge_pressure);
+}
+
+
+uint16_t DP_classic_brush_soft_dab_size_at(const DP_ClassicBrush *cb,
+                                           float pressure)
+{
+    float value = DP_classic_brush_size_at(cb, pressure) * 256.0f + 0.5f;
+    return DP_float_to_uint16(CLAMP(value, 0, UINT16_MAX));
+}
+
+uint8_t DP_classic_brush_pixel_dab_size_at(const DP_ClassicBrush *cb,
+                                           float pressure)
+{
+    float value = DP_classic_brush_size_at(cb, pressure) + 0.5f;
+    return DP_float_to_uint8(CLAMP(value, 1.0f, UINT8_MAX));
+}
+
+uint8_t DP_classic_brush_dab_opacity_at(const DP_ClassicBrush *cb,
+                                        float pressure)
+{
+    float value = DP_classic_brush_opacity_at(cb, pressure) * 255.0f + 0.5f;
+    return DP_float_to_uint8(CLAMP(value, 0, UINT8_MAX));
+}
+
+uint8_t DP_classic_brush_dab_hardness_at(const DP_ClassicBrush *cb,
+                                         float pressure)
+{
+    float value = DP_classic_brush_hardness_at(cb, pressure) * 255.0f + 0.5f;
+    return DP_float_to_uint8(CLAMP(value, 0, UINT8_MAX));
 }

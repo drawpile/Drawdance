@@ -236,16 +236,8 @@ static bool ora_store_background(DP_SaveOraContext *c, DP_CanvasState *cs)
     return true;
 }
 
-static bool ora_generate_thumbnail(DP_Image *img, DP_Image **out_thumb)
-{
-    // TODO this pointlessly allocates a bunch of memory for brush masks.
-    DP_DrawContext *dc = DP_draw_context_new();
-    bool ok = DP_image_thumbnail(img, dc, 256, 256, out_thumb);
-    DP_draw_context_free(dc);
-    return ok;
-}
-
-static bool ora_store_merged(DP_SaveOraContext *c, DP_CanvasState *cs)
+static bool ora_store_merged(DP_SaveOraContext *c, DP_CanvasState *cs,
+                             DP_DrawContext *dc)
 {
     DP_Image *img = DP_canvas_state_to_flat_image(
         cs, DP_FLAT_IMAGE_INCLUDE_BACKGROUND | DP_FLAT_IMAGE_INCLUDE_SUBLAYERS);
@@ -259,7 +251,7 @@ static bool ora_store_merged(DP_SaveOraContext *c, DP_CanvasState *cs)
     }
 
     DP_Image *thumb;
-    if (!ora_generate_thumbnail(img, &thumb)) {
+    if (!DP_image_thumbnail(img, dc, 256, 256, &thumb)) {
         DP_image_free(img);
         return false;
     }
@@ -507,7 +499,8 @@ static bool ora_store_xml(DP_SaveOraContext *c, DP_CanvasState *cs)
     return DP_zip_writer_add_file(c->zw, "stack.xml", buffer, size, true, true);
 }
 
-static DP_SaveResult save_ora(DP_CanvasState *cs, const char *path)
+static DP_SaveResult save_ora(DP_CanvasState *cs, const char *path,
+                              DP_DrawContext *dc)
 {
     DP_ZipWriter *zw = DP_zip_writer_new(path);
     if (!zw) {
@@ -527,7 +520,7 @@ static DP_SaveResult save_ora(DP_CanvasState *cs, const char *path)
     bool content_ok =
         ora_store_layers(&c, &next_index, DP_canvas_state_layers_noinc(cs),
                          DP_canvas_state_layer_props_noinc(cs))
-        && ora_store_background(&c, cs) && ora_store_merged(&c, cs)
+        && ora_store_background(&c, cs) && ora_store_merged(&c, cs, dc)
         && ora_store_xml(&c, cs);
     save_ora_context_dispose(&c);
     if (!content_ok) {
@@ -597,7 +590,7 @@ static DP_SaveResult save_flat_image(DP_CanvasState *cs, const char *path,
     return result;
 }
 
-DP_SaveResult DP_save(DP_CanvasState *cs, const char *path)
+DP_SaveResult DP_save(DP_CanvasState *cs, DP_DrawContext *dc, const char *path)
 {
     if (!cs || !path) {
         return DP_SAVE_RESULT_BAD_ARGUMENTS;
@@ -610,7 +603,7 @@ DP_SaveResult DP_save(DP_CanvasState *cs, const char *path)
 
     const char *ext = dot + 1;
     if (equals_lowercase(ext, "ora")) {
-        return save_ora(cs, path);
+        return save_ora(cs, path, dc);
     }
     else if (equals_lowercase(ext, "png")) {
         return save_flat_image(cs, path, save_png);

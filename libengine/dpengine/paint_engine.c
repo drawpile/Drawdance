@@ -94,6 +94,7 @@ struct DP_PaintEngine {
         DP_LayerPropsList *prev_lpl;
         DP_LayerPropsList *lpl;
     } hidden_layers;
+    DP_DrawContext *paint_dc;
     DP_PaintEnginePreview *preview;
     DP_DrawContext *preview_dc;
     DP_Queue local_queue;
@@ -310,7 +311,7 @@ static void handle_message(DP_PaintEngine *pe, DP_DrawContext *dc)
 static void run_paint_engine(void *user)
 {
     DP_PaintEngine *pe = user;
-    DP_DrawContext *dc = DP_draw_context_new();
+    DP_DrawContext *dc = pe->paint_dc;
     while (true) {
         DP_SEMAPHORE_MUST_WAIT(pe->queue_sem);
         if (DP_atomic_get(&pe->running)) {
@@ -320,12 +321,12 @@ static void run_paint_engine(void *user)
             break;
         }
     }
-    DP_draw_context_free(dc);
 }
 
 
 DP_PaintEngine *
-DP_paint_engine_new_inc(DP_AclState *acls, DP_CanvasState *cs_or_null,
+DP_paint_engine_new_inc(DP_DrawContext *paint_dc, DP_DrawContext *preview_dc,
+                        DP_AclState *acls, DP_CanvasState *cs_or_null,
                         DP_CanvasHistorySavePointFn save_point_fn,
                         void *save_point_user)
 {
@@ -345,8 +346,9 @@ DP_paint_engine_new_inc(DP_AclState *acls, DP_CanvasState *cs_or_null,
     pe->hidden_layers.layer_ids = NULL;
     pe->hidden_layers.prev_lpl = NULL;
     pe->hidden_layers.lpl = NULL;
+    pe->paint_dc = paint_dc;
     pe->preview = NULL;
-    pe->preview_dc = NULL;
+    pe->preview_dc = preview_dc;
     DP_message_queue_init(&pe->local_queue, INITIAL_QUEUE_CAPACITY);
     DP_message_queue_init(&pe->remote_queue, INITIAL_QUEUE_CAPACITY);
     pe->queue_sem = DP_semaphore_new(0);
@@ -379,7 +381,6 @@ void DP_paint_engine_free_join(DP_PaintEngine *pe)
             DP_message_decref(msg);
         }
         DP_message_queue_dispose(&pe->local_queue);
-        DP_draw_context_free(pe->preview_dc);
         free_preview(pe->preview);
         DP_layer_props_list_decref_nullable(pe->hidden_layers.lpl);
         DP_layer_props_list_decref_nullable(pe->hidden_layers.prev_lpl);
@@ -431,6 +432,7 @@ static void insert_hidden_layer(DP_PaintEngine *pe, int layer_id)
             DP_realloc(pe->hidden_layers.layer_ids,
                        DP_int_to_size(new_capacity)
                            * sizeof(*pe->hidden_layers.layer_ids));
+        pe->hidden_layers.capacity = new_capacity;
     }
     pe->hidden_layers.layer_ids[used] = layer_id;
 }
@@ -438,9 +440,8 @@ static void insert_hidden_layer(DP_PaintEngine *pe, int layer_id)
 static void remove_hidden_layer(DP_PaintEngine *pe, int index)
 {
     int *layer_ids = pe->hidden_layers.layer_ids;
-    int used = --pe->hidden_layers.used;
-    memmove(layer_ids + index, layer_ids + index + 1,
-            sizeof(*layer_ids) * DP_int_to_size(used - index));
+    int last = --pe->hidden_layers.used;
+    layer_ids[index] = layer_ids[last];
 }
 
 void DP_paint_engine_layer_visibility_set(DP_PaintEngine *pe, int layer_id,
@@ -886,13 +887,9 @@ static void sync_preview(DP_PaintEngine *pe, DP_PaintEnginePreview *preview)
 }
 
 static void set_preview(DP_PaintEngine *pe, DP_PaintEnginePreview *preview,
-                        bool needs_draw_context,
                         DP_PaintEnginePreviewRenderFn render,
                         DP_PaintEnginePreviewDisposeFn dispose)
 {
-    if (needs_draw_context && !pe->preview_dc) {
-        pe->preview_dc = DP_draw_context_new();
-    }
     DP_CanvasState *cs = pe->view_cs;
     preview->initial_offset_x = DP_canvas_state_offset_x(cs);
     preview->initial_offset_y = DP_canvas_state_offset_y(cs);
@@ -1004,8 +1001,7 @@ void DP_paint_engine_preview_cut(DP_PaintEngine *pe, int layer_id, int x, int y,
     for (int i = 0; i < mask_count; ++i) {
         pecp->mask[i] = mask_or_null[i].a;
     }
-    set_preview(pe, &pecp->parent, false, cut_preview_render,
-                cut_preview_dispose);
+    set_preview(pe, &pecp->parent, cut_preview_render, cut_preview_dispose);
 }
 
 
@@ -1117,7 +1113,7 @@ void DP_paint_engine_preview_dabs_inc(DP_PaintEngine *pe, int layer_id,
         for (int i = 0; i < count; ++i) {
             pedp->messages[i] = DP_message_incref(messages[i]);
         }
-        set_preview(pe, &pedp->parent, true, dabs_preview_render,
+        set_preview(pe, &pedp->parent, dabs_preview_render,
                     dabs_preview_dispose);
     }
 }

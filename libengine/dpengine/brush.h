@@ -71,4 +71,17 @@ float DP_classic_brush_opacity_at(const DP_ClassicBrush *cb, float pressure);
 float DP_classic_brush_smudge_at(const DP_ClassicBrush *cb, float pressure);
 
 
+uint16_t DP_classic_brush_soft_dab_size_at(const DP_ClassicBrush *cb,
+                                           float pressure);
+
+uint8_t DP_classic_brush_pixel_dab_size_at(const DP_ClassicBrush *cb,
+                                           float pressure);
+
+uint8_t DP_classic_brush_dab_opacity_at(const DP_ClassicBrush *cb,
+                                        float pressure);
+
+uint8_t DP_classic_brush_dab_hardness_at(const DP_ClassicBrush *cb,
+                                         float pressure);
+
+
 #endif

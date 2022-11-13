@@ -968,7 +968,7 @@ DP_CanvasStateChange DP_canvas_state_handle_multidab(DP_CanvasState *cs,
 {
     DP_ASSERT(cs);
     DP_ASSERT(dc);
-    DP_ASSERT(msgs);
+    DP_ASSERT(count <= 0 || msgs);
     return handle_draw_dabs(cs, dc, count, msgs);
 }
 

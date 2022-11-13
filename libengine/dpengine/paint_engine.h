@@ -43,7 +43,8 @@ typedef void (*DP_PaintEngineRenderTileFn)(void *user, int x, int y,
 typedef struct DP_PaintEngine DP_PaintEngine;
 
 DP_PaintEngine *
-DP_paint_engine_new_inc(DP_AclState *acls, DP_CanvasState *cs_or_null,
+DP_paint_engine_new_inc(DP_DrawContext *paint_dc, DP_DrawContext *preview_dc,
+                        DP_AclState *acls, DP_CanvasState *cs_or_null,
                         DP_CanvasHistorySavePointFn save_point_fn,
                         void *save_point_user);
 
