@@ -262,8 +262,7 @@ DP_Image *DP_flood_fill(DP_CanvasState *cs, int x, int y, DP_Pixel8 fill_color,
     }
 
     size_t buffer_size = DP_int_to_size(width) * DP_int_to_size(height);
-    unsigned char *buffer = DP_malloc(buffer_size);
-    memset(buffer, 0, buffer_size);
+    unsigned char *buffer = DP_malloc_zeroed(buffer_size);
 
     DP_FillContext c = {
         buffer,
