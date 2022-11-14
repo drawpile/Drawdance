@@ -175,6 +175,8 @@ static void dump_history(DP_CanvasHistory *ch)
 #    define DUMP_TYPE_LOCAL_MESSAGE   1
 #    define DUMP_TYPE_REMOTE_MULTIDAB 2
 #    define DUMP_TYPE_LOCAL_MULTIDAB  3
+#    define DUMP_TYPE_RESET           4
+#    define DUMP_TYPE_SOFT_RESET      5
 
 static unsigned char *get_dump_buffer(void *user, size_t size)
 {
@@ -246,9 +248,19 @@ static void dump_multidab(DP_CanvasHistory *ch, int count, DP_Message **msgs,
     }
 }
 
+static void dump_reset(DP_CanvasHistory *ch, bool hard)
+{
+    DP_Output *output = ch->dump.output;
+    unsigned char header[1] = {hard ? DUMP_TYPE_RESET : DUMP_TYPE_SOFT_RESET};
+    if (output && !DP_output_write(output, header, sizeof(header))) {
+        close_dump_on_error(ch, output);
+    }
+}
+
 #else
 #    define dump_message(CH, MSG, LOCAL)          /* nothing */
 #    define dump_multidab(CH, COUNT, MSGS, LOCAL) /* nothing */
+#    define dump_reset(CH, HARD)                  /* nothing */
 #endif
 
 
@@ -602,6 +614,7 @@ void DP_canvas_history_reset(DP_CanvasHistory *ch)
     // tile commands to restore the canvas as it was before the reset. Kinda
     // like git squash.
     HISTORY_DEBUG("Hard reset");
+    dump_reset(ch, true);
     reset_to_state_noinc(ch, DP_canvas_state_new());
 }
 
@@ -615,6 +628,7 @@ void DP_canvas_history_soft_reset(DP_CanvasHistory *ch)
     // soft reset so that they can't undo beyond the point that the new
     // client joined at.
     HISTORY_DEBUG("Soft reset");
+    dump_reset(ch, false);
     reset_to_state_noinc(ch, DP_canvas_state_incref(ch->current_state));
 }
 
@@ -821,8 +835,9 @@ replay_drawing_command(DP_CanvasHistory *ch, DP_CanvasState *cs,
 {
     if (is_draw_dabs_message_type(type)) {
         int index = ch->replay.used++;
+        DP_ASSERT(index < REPLAY_BUFFER_CAPACITY);
         ch->replay.buffer[index] = msg;
-        if (index < REPLAY_BUFFER_CAPACITY) {
+        if (index < REPLAY_BUFFER_CAPACITY - 1) {
             return cs;
         }
         else {
@@ -889,6 +904,9 @@ static void replay_from_inc(DP_CanvasHistory *ch, DP_DrawContext *dc,
             // Update undo points even when they're undone so
             // they can serve as a starting point for redos.
             if (type == DP_MSG_UNDO_POINT) {
+                if (ch->replay.used != 0) {
+                    cs = flush_replay_buffer(ch, cs, dc);
+                }
                 DP_canvas_state_decref_nullable(entry->state);
                 entry->state = DP_canvas_state_incref(cs);
             }

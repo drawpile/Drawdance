@@ -252,7 +252,8 @@ DP_AffectedArea DP_affected_area_make(DP_Message *msg, DP_CanvasState *cs)
     case DP_MSG_DRAW_DABS_PIXEL:
         return make_pixel_dabs_affected_area(DP_msg_draw_dabs_pixel_cast(msg));
     case DP_MSG_DRAW_DABS_PIXEL_SQUARE:
-        return make_pixel_dabs_affected_area(DP_msg_draw_dabs_pixel_square_cast(msg));
+        return make_pixel_dabs_affected_area(
+            DP_msg_draw_dabs_pixel_square_cast(msg));
     case DP_MSG_DRAW_DABS_MYPAINT: {
         DP_MsgDrawDabsMyPaint *mddmp = DP_msg_draw_dabs_mypaint_cast(msg);
         return make_pixels(DP_msg_draw_dabs_mypaint_layer(mddmp),

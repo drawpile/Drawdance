@@ -181,7 +181,7 @@ static void handle_internal(DP_PaintEngine *pe, DP_MsgInternal *mi)
 // worry about a more sophisticated way of estimating batch size.
 #define MAX_MULTIDABS 128
 
-static bool offset_first_message(DP_PaintEngine *pe, DP_Message **msgs)
+static bool shift_first_message(DP_PaintEngine *pe, DP_Message **msgs)
 {
     // Local queue takes priority, we want our own strokes to be responsive.
     DP_Message *msg = DP_message_queue_shift(&pe->local_queue);
@@ -215,9 +215,9 @@ static int get_dab_count(DP_Message *msg, DP_MessageType type)
     }
 }
 
-static int offset_more_draw_dabs_messages(DP_PaintEngine *pe, bool local,
-                                          DP_Message **msgs,
-                                          int initial_dab_count)
+static int shift_more_draw_dabs_messages(DP_PaintEngine *pe, bool local,
+                                         DP_Message **msgs,
+                                         int initial_dab_count)
 {
     int count = 1;
     int total_dab_count = initial_dab_count;
@@ -245,12 +245,12 @@ static int offset_more_draw_dabs_messages(DP_PaintEngine *pe, bool local,
     return count;
 }
 
-static int maybe_offset_more_messages(DP_PaintEngine *pe, bool local,
-                                      DP_MessageType type, DP_Message **msgs)
+static int maybe_shift_more_messages(DP_PaintEngine *pe, bool local,
+                                     DP_MessageType type, DP_Message **msgs)
 {
     int dab_count = get_dab_count(msgs[0], type);
     if (dab_count != -1 && dab_count < MAX_MULTIDABS) {
-        return offset_more_draw_dabs_messages(pe, local, msgs, dab_count);
+        return shift_more_draw_dabs_messages(pe, local, msgs, dab_count);
     }
     else {
         return 1;
@@ -292,10 +292,10 @@ static void handle_message(DP_PaintEngine *pe, DP_DrawContext *dc)
 {
     DP_Message *msgs[MAX_MULTIDABS];
     DP_MUTEX_MUST_LOCK(pe->queue_mutex);
-    bool local = offset_first_message(pe, msgs);
+    bool local = shift_first_message(pe, msgs);
     DP_Message *first = msgs[0];
     DP_MessageType type = DP_message_type(first);
-    int count = maybe_offset_more_messages(pe, local, type, msgs);
+    int count = maybe_shift_more_messages(pe, local, type, msgs);
     DP_MUTEX_MUST_UNLOCK(pe->queue_mutex);
 
     DP_ASSERT(count > 0);
