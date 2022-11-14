@@ -331,6 +331,9 @@ static void ora_write_layers_xml(DP_SaveOraContext *c, DP_Output *output,
         if (DP_layer_list_entry_is_group(lle)) {
             DP_OUTPUT_PRINT_LITERAL(output, "<stack");
             ora_write_layer_props_xml(c, output, lp);
+            if (DP_layer_props_isolated(lp)) {
+                DP_OUTPUT_PRINT_LITERAL(output, " isolation=\"isolate\"");
+            }
             DP_LayerGroup *lg = DP_layer_list_entry_group_noinc(lle);
             DP_LayerList *child_ll = DP_layer_group_children_noinc(lg);
             if (DP_layer_list_count(child_ll) == 0) {
@@ -340,9 +343,6 @@ static void ora_write_layers_xml(DP_SaveOraContext *c, DP_Output *output,
                 DP_OUTPUT_PRINT_LITERAL(output, ">");
                 ora_write_layers_xml(c, output, child_ll,
                                      DP_layer_props_children_noinc(lp));
-                if (DP_layer_props_isolated(lp)) {
-                    DP_OUTPUT_PRINT_LITERAL(output, " isolation=\"isolate\"");
-                }
                 DP_OUTPUT_PRINT_LITERAL(output, "</stack>");
             }
         }
