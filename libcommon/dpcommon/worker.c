@@ -21,6 +21,7 @@
  */
 #include "worker.h"
 #include "common.h"
+#include "conversions.h"
 #include "queue.h"
 #include "threading.h"
 
@@ -36,7 +37,8 @@ typedef struct DP_Worker {
     DP_Semaphore *sem;
     DP_Queue queue;
     DP_Mutex *queue_mutex;
-    DP_Thread *thread;
+    int thread_count;
+    DP_Thread *threads[];
 } DP_Worker;
 
 
@@ -77,15 +79,16 @@ static void run_worker_thread(void *data)
     }
 }
 
-DP_Worker *DP_worker_new(size_t initial_capacity)
+DP_Worker *DP_worker_new(size_t initial_capacity, int thread_count)
 {
     DP_ASSERT(initial_capacity > 0);
-    DP_Worker *worker = DP_malloc(sizeof(*worker));
-    *worker = (DP_Worker){NULL, DP_QUEUE_NULL, NULL, NULL};
+    DP_ASSERT(thread_count > 0);
+    DP_Worker *worker = DP_malloc_zeroed(
+        DP_FLEX_SIZEOF(DP_Worker, threads, DP_int_to_size(thread_count)));
 
     worker->sem = DP_semaphore_new(0);
     if (!worker->sem) {
-        DP_worker_free(worker);
+        DP_worker_free_join(worker);
         return NULL;
     }
 
@@ -93,27 +96,36 @@ DP_Worker *DP_worker_new(size_t initial_capacity)
 
     worker->queue_mutex = DP_mutex_new();
     if (!worker->queue_mutex) {
-        DP_worker_free(worker);
+        DP_worker_free_join(worker);
         return NULL;
     }
 
-    worker->thread = DP_thread_new(run_worker_thread, worker);
-    if (!worker->thread) {
-        DP_worker_free(worker);
-        return NULL;
+    for (int i = 0; i < thread_count; ++i) {
+        DP_Thread *thread = DP_thread_new(run_worker_thread, worker);
+        if (thread) {
+            worker->threads[i] = thread;
+            worker->thread_count = i + 1;
+        }
+        else {
+            DP_worker_free_join(worker);
+            return NULL;
+        }
     }
 
     return worker;
 }
 
-void DP_worker_free(DP_Worker *worker)
+void DP_worker_free_join(DP_Worker *worker)
 {
     if (worker) {
         DP_Semaphore *sem = worker->sem;
+        int thread_count = worker->thread_count;
         if (sem) {
-            DP_SEMAPHORE_MUST_POST(sem);
+            DP_SEMAPHORE_MUST_POST_N(sem, thread_count);
         }
-        DP_thread_free_join(worker->thread);
+        for (int i = 0; i < thread_count; ++i) {
+            DP_thread_free_join(worker->threads[i]);
+        }
         DP_mutex_free(worker->queue_mutex);
         DP_queue_dispose(&worker->queue);
         DP_semaphore_free(sem);

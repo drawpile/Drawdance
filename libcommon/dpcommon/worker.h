@@ -28,9 +28,9 @@ typedef struct DP_Worker DP_Worker;
 
 typedef void (*DP_WorkerFn)(void *user);
 
-DP_Worker *DP_worker_new(size_t initial_capacity);
+DP_Worker *DP_worker_new(size_t initial_capacity, int thread_count);
 
-void DP_worker_free(DP_Worker *worker);
+void DP_worker_free_join(DP_Worker *worker);
 
 void DP_worker_push(DP_Worker *worker, DP_WorkerFn fn, void *user);
 

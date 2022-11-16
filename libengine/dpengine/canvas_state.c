@@ -1219,9 +1219,23 @@ DP_transient_canvas_state_incref(DP_TransientCanvasState *tcs)
         (DP_CanvasState *)tcs);
 }
 
+DP_TransientCanvasState *
+DP_transient_canvas_state_incref_nullable(DP_TransientCanvasState *tcs_or_null)
+{
+    return tcs_or_null ? DP_transient_canvas_state_incref(tcs_or_null) : NULL;
+}
+
 void DP_transient_canvas_state_decref(DP_TransientCanvasState *tcs)
 {
     DP_canvas_state_decref((DP_CanvasState *)tcs);
+}
+
+void DP_transient_canvas_state_decref_nullable(
+    DP_TransientCanvasState *tcs_or_null)
+{
+    if (tcs_or_null) {
+        DP_transient_canvas_state_decref(tcs_or_null);
+    }
 }
 
 int DP_transient_canvas_state_refcount(DP_TransientCanvasState *tcs)
@@ -1251,6 +1265,22 @@ DP_CanvasState *DP_transient_canvas_state_persist(DP_TransientCanvasState *tcs)
     }
     tcs->transient = false;
     return (DP_CanvasState *)tcs;
+}
+
+int DP_transient_canvas_state_width(DP_TransientCanvasState *tcs)
+{
+    DP_ASSERT(tcs);
+    DP_ASSERT(DP_atomic_get(&tcs->refcount) > 0);
+    DP_ASSERT(tcs->transient);
+    return tcs->width;
+}
+
+int DP_transient_canvas_state_height(DP_TransientCanvasState *tcs)
+{
+    DP_ASSERT(tcs);
+    DP_ASSERT(DP_atomic_get(&tcs->refcount) > 0);
+    DP_ASSERT(tcs->transient);
+    return tcs->height;
 }
 
 void DP_transient_canvas_state_width_set(DP_TransientCanvasState *tcs,

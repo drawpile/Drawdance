@@ -93,6 +93,9 @@ DP_Tile *DP_tile_new_from_pixel15(unsigned int context_id, DP_Pixel15 pixel);
 
 DP_Tile *DP_tile_new_from_upixel15(unsigned int context_id, DP_UPixel15 pixel);
 
+DP_Tile *DP_tile_new_from_pixels8(unsigned int context_id,
+                                  const DP_Pixel8 *pixels);
+
 DP_Tile *DP_tile_new_from_bgra(unsigned int context_id, uint32_t bgra);
 
 DP_Tile *DP_tile_new_from_compressed(DP_DrawContext *dc,

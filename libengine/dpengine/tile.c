@@ -87,6 +87,14 @@ DP_Tile *DP_tile_new_from_upixel15(unsigned int context_id, DP_UPixel15 pixel)
     return DP_tile_new_from_pixel15(context_id, DP_pixel15_premultiply(pixel));
 }
 
+DP_Tile *DP_tile_new_from_pixels8(unsigned int context_id,
+                                  const DP_Pixel8 *pixels)
+{
+    DP_TransientTile *tt = alloc_tile(false, context_id);
+    DP_pixels8_to_15(tt->pixels, pixels, DP_TILE_LENGTH);
+    return (DP_Tile *)tt;
+}
+
 DP_Tile *DP_tile_new_from_bgra(unsigned int context_id, uint32_t bgra)
 {
     return DP_tile_new_from_upixel15(context_id, DP_upixel15_from_color(bgra));

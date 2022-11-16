@@ -176,11 +176,21 @@ DP_TransientCanvasState *DP_transient_canvas_state_new_with_layers_noinc(
 DP_TransientCanvasState *
 DP_transient_canvas_state_incref(DP_TransientCanvasState *cs);
 
+DP_TransientCanvasState *
+DP_transient_canvas_state_incref_nullable(DP_TransientCanvasState *tcs_or_null);
+
 void DP_transient_canvas_state_decref(DP_TransientCanvasState *cs);
+
+void DP_transient_canvas_state_decref_nullable(
+    DP_TransientCanvasState *tcs_or_null);
 
 int DP_transient_canvas_state_refcount(DP_TransientCanvasState *cs);
 
 DP_CanvasState *DP_transient_canvas_state_persist(DP_TransientCanvasState *tcs);
+
+int DP_transient_canvas_state_width(DP_TransientCanvasState *tcs);
+
+int DP_transient_canvas_state_height(DP_TransientCanvasState *tcs);
 
 void DP_transient_canvas_state_width_set(DP_TransientCanvasState *tcs,
                                          int width);

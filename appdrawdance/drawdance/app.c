@@ -152,7 +152,7 @@ static bool init_gui_thread(DP_UNUSED DP_App *app)
 
 static bool init_worker(DP_App *app)
 {
-    return (app->worker = DP_worker_new(1));
+    return (app->worker = DP_worker_new(1, 1));
 }
 
 
@@ -282,7 +282,7 @@ void DP_app_free(DP_App *app)
         app->running = false;
         DP_Worker *worker = app->worker;
         app->worker = NULL;
-        DP_worker_free(worker);
+        DP_worker_free_join(worker);
 #if defined(DRAWDANCE_IMGUI) && !defined(__EMSCRIPTEN__)
         if (app->thread_gui) {
             DP_SEMAPHORE_MUST_POST(app->sem_gui_prepare);

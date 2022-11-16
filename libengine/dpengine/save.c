@@ -469,7 +469,7 @@ static char *ora_write_xml(DP_SaveOraContext *c, DP_CanvasState *cs,
     ORA_APPEND_ATTR(c, output, "version", "0.0.3");
     DP_DocumentMetadata *dm = DP_canvas_state_metadata_noinc(cs);
     ORA_APPEND_ATTR(c, output, "xres", "%d", DP_document_metadata_dpix(dm));
-    ORA_APPEND_ATTR(c, output, "xyes", "%d", DP_document_metadata_dpiy(dm));
+    ORA_APPEND_ATTR(c, output, "yres", "%d", DP_document_metadata_dpiy(dm));
     ORA_APPEND_ATTR(c, output, "drawpile:framerate", "%d",
                     DP_document_metadata_framerate(dm));
     DP_OUTPUT_PRINT_LITERAL(output, ">");
@@ -551,22 +551,6 @@ static DP_SaveResult save_png(DP_Image *img, DP_Output *output)
 }
 
 
-static bool equals_lowercase(const char *a, const char *b)
-{
-    size_t len = strlen(a);
-    if (len == strlen(b)) {
-        for (size_t i = 0; i < len; ++i) {
-            if (tolower(a[i]) != tolower(b[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
 static DP_SaveResult save_flat_image(DP_CanvasState *cs, const char *path,
                                      DP_SaveResult (*save_fn)(DP_Image *,
                                                               DP_Output *))
@@ -602,10 +586,10 @@ DP_SaveResult DP_save(DP_CanvasState *cs, DP_DrawContext *dc, const char *path)
     }
 
     const char *ext = dot + 1;
-    if (equals_lowercase(ext, "ora")) {
+    if (DP_str_equal_lowercase(ext, "ora")) {
         return save_ora(cs, path, dc);
     }
-    else if (equals_lowercase(ext, "png")) {
+    else if (DP_str_equal_lowercase(ext, "png")) {
         return save_flat_image(cs, path, save_png);
     }
     else {

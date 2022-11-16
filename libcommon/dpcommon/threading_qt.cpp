@@ -125,6 +125,11 @@ extern "C" DP_SemaphoreResult DP_semaphore_try_wait(DP_Semaphore *sem)
 }
 
 
+extern "C" int DP_thread_cpu_count(void)
+{
+    return DP_max_int(1, QThread::idealThreadCount());
+}
+
 extern "C" DP_Thread *DP_thread_new(DP_ThreadFn fn, void *data)
 {
     QThread *qthread = QThread::create([=]() { fn(data); });

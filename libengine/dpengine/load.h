@@ -21,6 +21,7 @@ typedef enum DP_LoadResult {
     DP_LOAD_RESULT_UNKNOWN_FORMAT,
     DP_LOAD_RESULT_OPEN_ERROR,
     DP_LOAD_RESULT_READ_ERROR,
+    DP_LOAD_RESULT_BAD_MIMETYPE,
 } DP_LoadResult;
 
 DP_CanvasState *DP_load(DP_DrawContext *dc, const char *path,

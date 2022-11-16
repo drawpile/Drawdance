@@ -169,14 +169,16 @@ static void dump_history(DP_CanvasHistory *ch)
 #endif
 
 
-#ifdef DRAWDANCE_HISTORY_DUMP
+#define DUMP_TYPE_REMOTE_MESSAGE                            0
+#define DUMP_TYPE_REMOTE_MESSAGE_LOCAL_DRAWING_IN_PROGRESS  1
+#define DUMP_TYPE_LOCAL_MESSAGE                             2
+#define DUMP_TYPE_REMOTE_MULTIDAB                           3
+#define DUMP_TYPE_REMOTE_MULTIDAB_LOCAL_DRAWING_IN_PROGRESS 4
+#define DUMP_TYPE_LOCAL_MULTIDAB                            5
+#define DUMP_TYPE_RESET                                     6
+#define DUMP_TYPE_SOFT_RESET                                7
 
-#    define DUMP_TYPE_REMOTE_MESSAGE  0
-#    define DUMP_TYPE_LOCAL_MESSAGE   1
-#    define DUMP_TYPE_REMOTE_MULTIDAB 2
-#    define DUMP_TYPE_LOCAL_MULTIDAB  3
-#    define DUMP_TYPE_RESET           4
-#    define DUMP_TYPE_SOFT_RESET      5
+#ifdef DRAWDANCE_HISTORY_DUMP
 
 static unsigned char *get_dump_buffer(void *user, size_t size)
 {
@@ -199,10 +201,9 @@ static bool write_dump_message(DP_CanvasHistory *ch, DP_Output *output,
 }
 
 static bool try_dump_message(DP_CanvasHistory *ch, DP_Output *output,
-                             DP_Message *msg, bool local)
+                             DP_Message *msg, unsigned char type)
 {
-    unsigned char header[1] = {local ? DUMP_TYPE_LOCAL_MESSAGE
-                                     : DUMP_TYPE_REMOTE_MESSAGE};
+    unsigned char header[1] = {type};
     return DP_output_write(output, header, sizeof(header))
         && write_dump_message(ch, output, msg) && DP_output_flush(output);
 }
@@ -214,19 +215,20 @@ static void close_dump_on_error(DP_CanvasHistory *ch, DP_Output *output)
     ch->dump.output = NULL;
 }
 
-static void dump_message(DP_CanvasHistory *ch, DP_Message *msg, bool local)
+static void dump_message(DP_CanvasHistory *ch, DP_Message *msg,
+                         unsigned char type)
 {
     DP_Output *output = ch->dump.output;
-    if (output && !try_dump_message(ch, output, msg, local)) {
+    if (output && !try_dump_message(ch, output, msg, type)) {
         close_dump_on_error(ch, output);
     }
 }
 
 static bool try_dump_multidab(DP_CanvasHistory *ch, DP_Output *output,
-                              int count, DP_Message **msgs, bool local)
+                              int count, DP_Message **msgs, unsigned char type)
 {
     unsigned char header[5];
-    header[0] = local ? DUMP_TYPE_LOCAL_MULTIDAB : DUMP_TYPE_REMOTE_MULTIDAB;
+    header[0] = type;
     DP_write_bigendian_uint32(DP_int_to_uint32(count), header + 1);
     if (!DP_output_write(output, header, sizeof(header))) {
         return false;
@@ -240,27 +242,27 @@ static bool try_dump_multidab(DP_CanvasHistory *ch, DP_Output *output,
 }
 
 static void dump_multidab(DP_CanvasHistory *ch, int count, DP_Message **msgs,
-                          bool local)
+                          unsigned char type)
 {
     DP_Output *output = ch->dump.output;
-    if (output && !try_dump_multidab(ch, output, count, msgs, local)) {
+    if (output && !try_dump_multidab(ch, output, count, msgs, type)) {
         close_dump_on_error(ch, output);
     }
 }
 
-static void dump_reset(DP_CanvasHistory *ch, bool hard)
+static void dump_internal(DP_CanvasHistory *ch, unsigned char type)
 {
     DP_Output *output = ch->dump.output;
-    unsigned char header[1] = {hard ? DUMP_TYPE_RESET : DUMP_TYPE_SOFT_RESET};
+    unsigned char header[1] = {type};
     if (output && !DP_output_write(output, header, sizeof(header))) {
         close_dump_on_error(ch, output);
     }
 }
 
 #else
-#    define dump_message(CH, MSG, LOCAL)          /* nothing */
-#    define dump_multidab(CH, COUNT, MSGS, LOCAL) /* nothing */
-#    define dump_reset(CH, HARD)                  /* nothing */
+#    define dump_message(CH, MSG, TYPE)          /* nothing */
+#    define dump_multidab(CH, COUNT, MSGS, TYPE) /* nothing */
+#    define dump_internal(CH, TYPE)              /* nothing */
 #endif
 
 
@@ -614,7 +616,7 @@ void DP_canvas_history_reset(DP_CanvasHistory *ch)
     // tile commands to restore the canvas as it was before the reset. Kinda
     // like git squash.
     HISTORY_DEBUG("Hard reset");
-    dump_reset(ch, true);
+    dump_internal(ch, DUMP_TYPE_RESET);
     reset_to_state_noinc(ch, DP_canvas_state_new());
 }
 
@@ -628,7 +630,7 @@ void DP_canvas_history_soft_reset(DP_CanvasHistory *ch)
     // soft reset so that they can't undo beyond the point that the new
     // client joined at.
     HISTORY_DEBUG("Soft reset");
-    dump_reset(ch, false);
+    dump_internal(ch, DUMP_TYPE_SOFT_RESET);
     reset_to_state_noinc(ch, DP_canvas_state_incref(ch->current_state));
 }
 
@@ -1130,7 +1132,8 @@ static bool handle_command(DP_CanvasHistory *ch, DP_DrawContext *dc,
 
 static DP_ForkAction reconcile_remote_command(DP_CanvasHistory *ch,
                                               DP_Message *msg,
-                                              DP_MessageType type)
+                                              DP_MessageType type,
+                                              bool local_drawing_in_progress)
 {
     DP_ASSERT(DP_message_type(msg) == type);
 
@@ -1180,7 +1183,7 @@ static DP_ForkAction reconcile_remote_command(DP_CanvasHistory *ch,
         DP_warn("Rollback: non-concurrent fork");
         // Avoid a rollback storm by clearing the local fork, but not when
         // drawing is in progress, since that would cause a feedback loop.
-        if (DP_canvas_history_local_drawing_in_progress(ch)) {
+        if (local_drawing_in_progress) {
             DP_warn("Local drawing in progress, not clearing fork");
         }
         else {
@@ -1191,7 +1194,8 @@ static DP_ForkAction reconcile_remote_command(DP_CanvasHistory *ch,
 }
 
 static bool handle_remote_command(DP_CanvasHistory *ch, DP_DrawContext *dc,
-                                  DP_Message *msg, DP_MessageType type)
+                                  DP_Message *msg, DP_MessageType type,
+                                  bool local_drawing_in_progress)
 {
     DP_ASSERT(DP_message_type(msg) == type);
     HISTORY_DEBUG("Handle remote %s command from user %u",
@@ -1200,7 +1204,8 @@ static bool handle_remote_command(DP_CanvasHistory *ch, DP_DrawContext *dc,
 
     int index = type == DP_MSG_UNDO ? -1 : append_to_history_inc(ch, msg);
 
-    DP_ForkAction fork_action = reconcile_remote_command(ch, msg, type);
+    DP_ForkAction fork_action =
+        reconcile_remote_command(ch, msg, type, local_drawing_in_progress);
     switch (fork_action) {
     case DP_FORK_ACTION_CONCURRENT:
         return handle_command(ch, dc, msg, type, index);
@@ -1220,12 +1225,19 @@ bool DP_canvas_history_handle(DP_CanvasHistory *ch, DP_DrawContext *dc,
     HISTORY_DEBUG("Handle remote %s command from user %u",
                   DP_message_type_enum_name_unprefixed(DP_message_type(msg)),
                   DP_message_context_id(msg));
-    dump_message(ch, msg, false);
+
+    bool local_drawing_in_progress =
+        DP_canvas_history_local_drawing_in_progress(ch);
+    dump_message(ch, msg,
+                 local_drawing_in_progress
+                     ? DUMP_TYPE_REMOTE_MESSAGE_LOCAL_DRAWING_IN_PROGRESS
+                     : DUMP_TYPE_REMOTE_MESSAGE);
 
     DP_MessageType type = DP_message_type(msg);
     bool ok = type == DP_MSG_INTERNAL
                 ? handle_internal(ch, DP_msg_internal_cast(msg))
-                : handle_remote_command(ch, dc, msg, type);
+                : handle_remote_command(ch, dc, msg, type,
+                                        local_drawing_in_progress);
     validate_history(ch);
     return ok;
 }
@@ -1239,7 +1251,7 @@ bool DP_canvas_history_handle_local(DP_CanvasHistory *ch, DP_DrawContext *dc,
     HISTORY_DEBUG("Handle local %s command from user %u",
                   DP_message_type_enum_name_unprefixed(DP_message_type(msg)),
                   DP_message_context_id(msg));
-    dump_message(ch, msg, true);
+    dump_message(ch, msg, DUMP_TYPE_LOCAL_MESSAGE);
 
     if (!have_local_fork(ch)) {
         set_fork_start(ch);
@@ -1262,14 +1274,20 @@ void DP_canvas_history_handle_multidab_dec(DP_CanvasHistory *ch,
     DP_ASSERT(ch);
     DP_ASSERT(count > 1);
     DP_ASSERT(msgs);
-    dump_multidab(ch, count, msgs, false);
+
+    bool local_drawing_in_progress =
+        DP_canvas_history_local_drawing_in_progress(ch);
+    dump_multidab(ch, count, msgs,
+                  local_drawing_in_progress
+                      ? DUMP_TYPE_REMOTE_MULTIDAB_LOCAL_DRAWING_IN_PROGRESS
+                      : DUMP_TYPE_REMOTE_MULTIDAB);
 
     int offset = 0;
     for (int i = 0; i < count; ++i) {
         DP_Message *msg = msgs[i];
         append_to_history_noinc(ch, msg);
-        DP_ForkAction fork_action =
-            reconcile_remote_command(ch, msg, DP_message_type(msg));
+        DP_ForkAction fork_action = reconcile_remote_command(
+            ch, msg, DP_message_type(msg), local_drawing_in_progress);
         switch (fork_action) {
         case DP_FORK_ACTION_ROLLBACK:
             search_and_replay_from(ch, dc, ch->fork.start - ch->offset);
@@ -1310,7 +1328,7 @@ void DP_canvas_history_handle_local_multidab_dec(DP_CanvasHistory *ch,
     DP_ASSERT(ch);
     DP_ASSERT(count > 0);
     DP_ASSERT(msgs);
-    dump_multidab(ch, count, msgs, true);
+    dump_multidab(ch, count, msgs, DUMP_TYPE_LOCAL_MULTIDAB);
 
     if (!have_local_fork(ch)) {
         set_fork_start(ch);
