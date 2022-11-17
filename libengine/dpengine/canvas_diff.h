@@ -54,6 +54,12 @@ void DP_canvas_diff_each_pos(DP_CanvasDiff *diff, DP_CanvasDiffEachPosFn fn,
 void DP_canvas_diff_each_pos_reset(DP_CanvasDiff *diff,
                                    DP_CanvasDiffEachPosFn fn, void *data);
 
+void DP_canvas_diff_each_pos_tile_bounds_reset(DP_CanvasDiff *diff,
+                                               int tile_left, int tile_top,
+                                               int tile_right, int tile_bottom,
+                                               DP_CanvasDiffEachPosFn fn,
+                                               void *data);
+
 bool DP_canvas_diff_layer_props_changed_reset(DP_CanvasDiff *diff);
 
 

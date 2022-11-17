@@ -309,18 +309,13 @@ struct DP_OraLoadLayerContentParams {
     int x, y;
 };
 
-static void ora_load_layer_content_job(void *user)
+static void ora_load_layer_content_job(void *user, DP_UNUSED int thread_index)
 {
     struct DP_OraLoadLayerContentParams *params = user;
-    DP_TransientLayerContent *tlc = params->tlc;
-    DP_ZipReaderFile *zrf = params->zrf;
-    int x = params->x;
-    int y = params->y;
-    DP_free(params);
-    DP_Image *img = ora_load_png_free(zrf);
+    DP_Image *img = ora_load_png_free(params->zrf);
     if (img) {
-        DP_transient_layer_content_put_image(tlc, 0, DP_BLEND_MODE_REPLACE, x,
-                                             y, img);
+        DP_transient_layer_content_put_image(
+            params->tlc, 0, DP_BLEND_MODE_REPLACE, params->x, params->y, img);
         DP_image_free(img);
     }
     else {
@@ -343,11 +338,10 @@ static void ora_load_layer_content_in_worker(DP_ReadOraContext *c,
         return;
     }
 
-    struct DP_OraLoadLayerContentParams *params = DP_malloc(sizeof(*params));
-    *params = (struct DP_OraLoadLayerContentParams){tlc, zrf, 0, 0};
-    ora_read_int_attribute(element, "x", INT32_MIN, INT32_MAX, &params->x);
-    ora_read_int_attribute(element, "y", INT32_MIN, INT32_MAX, &params->y);
-    DP_worker_push(c->worker, ora_load_layer_content_job, params);
+    struct DP_OraLoadLayerContentParams params = {tlc, zrf, 0, 0};
+    ora_read_int_attribute(element, "x", INT32_MIN, INT32_MAX, &params.x);
+    ora_read_int_attribute(element, "y", INT32_MIN, INT32_MAX, &params.y);
+    DP_worker_push(c->worker, &params);
 }
 
 static bool ora_handle_layer(DP_ReadOraContext *c, DP_XmlElement *element)
@@ -542,7 +536,9 @@ static DP_CanvasState *ora_read_stack_xml(DP_ReadOraContext *c)
         return NULL;
     }
 
-    c->worker = DP_worker_new(64, DP_thread_cpu_count());
+    c->worker =
+        DP_worker_new(64, sizeof(struct DP_OraLoadLayerContentParams),
+                      DP_thread_cpu_count(), ora_load_layer_content_job);
     if (!c->worker) {
         DP_zip_reader_file_free(zrf);
         return NULL;

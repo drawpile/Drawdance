@@ -170,6 +170,31 @@ void DP_canvas_diff_each_pos_reset(DP_CanvasDiff *diff,
     }
 }
 
+void DP_canvas_diff_each_pos_tile_bounds_reset(DP_CanvasDiff *diff,
+                                               int tile_left, int tile_top,
+                                               int tile_right, int tile_bottom,
+                                               DP_CanvasDiffEachPosFn fn,
+                                               void *data)
+{
+    DP_ASSERT(diff);
+    DP_ASSERT(fn);
+    int xtiles = diff->xtiles;
+    int left = DP_max_int(0, tile_left);
+    int top = DP_max_int(0, tile_top);
+    int right = DP_min_int(xtiles - 1, tile_right);
+    int bottom = DP_min_int(diff->ytiles - 1, tile_bottom);
+    bool *tile_changes = diff->tile_changes;
+    for (int y = top; y <= bottom; ++y) {
+        for (int x = left; x <= right; ++x) {
+            int i = y * xtiles + x;
+            if (tile_changes[i]) {
+                fn(data, x, y);
+                tile_changes[i] = false;
+            }
+        }
+    }
+}
+
 
 bool DP_canvas_diff_layer_props_changed_reset(DP_CanvasDiff *diff)
 {

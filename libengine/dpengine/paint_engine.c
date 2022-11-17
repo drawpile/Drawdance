@@ -14,6 +14,7 @@
 #include <dpcommon/conversions.h>
 #include <dpcommon/queue.h>
 #include <dpcommon/threading.h>
+#include <dpcommon/worker.h>
 #include <dpmsg/acl.h>
 #include <dpmsg/blend_mode.h>
 #include <dpmsg/message.h>
@@ -79,6 +80,14 @@ typedef struct DP_PaintEngineCursorChanges {
     DP_PaintEngineCursorPosition positions[256];
 } DP_PaintEngineCursorChanges;
 
+typedef struct DP_PaintEngineMetaBuffer {
+    uint8_t acl_change_flags;
+    bool have_default_layer;
+    uint16_t default_layer;
+    DP_PaintEngineLaserChanges laser_changes;
+    DP_PaintEngineCursorChanges cursor_changes;
+} DP_PaintEngineMetaBuffer;
+
 struct DP_PaintEngine {
     DP_AclState *acls;
     DP_CanvasHistory *ch;
@@ -104,25 +113,13 @@ struct DP_PaintEngine {
     DP_Atomic running;
     DP_Atomic catchup;
     DP_AtomicPtr next_preview;
-    DP_Thread *thread;
-    union {
-        // Buffer for metadata changes when handling messages. We collect all of
-        // them before running any callbacks so that we lock the paint engine
-        // for as little time as possible.
-        struct {
-            uint8_t acl_change_flags;
-            bool have_default_layer;
-            uint16_t default_layer;
-            DP_PaintEngineLaserChanges laser_changes;
-            DP_PaintEngineCursorChanges cursor_changes;
-        } meta_buffer;
-        // Buffer for handling a paint engine tick.
-        struct {
-            DP_UserCursorBuffer cursors;
-        } tick_buffer;
-        // Buffer for rendering a tile to the canvas.
-        DP_Pixel8 pixel_buffer[DP_TILE_LENGTH];
-    };
+    DP_Thread *paint_thread;
+    struct {
+        DP_Worker *worker;
+        DP_Semaphore *tiles_done_sem;
+        int tiles_waiting;
+    } render;
+    alignas(max_align_t) unsigned char buffers[];
 };
 
 struct DP_PaintEngineRenderParams {
@@ -130,6 +127,11 @@ struct DP_PaintEngineRenderParams {
     int xtiles;
     DP_PaintEngineRenderTileFn render_tile;
     void *user;
+};
+
+struct DP_PaintEngineRenderJobParams {
+    struct DP_PaintEngineRenderParams *render_params;
+    int x, y;
 };
 
 
@@ -324,13 +326,45 @@ static void run_paint_engine(void *user)
 }
 
 
+static void render_job(void *user, int thread_index)
+{
+    struct DP_PaintEngineRenderJobParams *job_params = user;
+    struct DP_PaintEngineRenderParams *render_params =
+        job_params->render_params;
+    int x = job_params->x;
+    int y = job_params->y;
+
+    DP_PaintEngine *pe = render_params->pe;
+    DP_TransientLayerContent *tlc = pe->tlc;
+    DP_TransientTile *tt = DP_transient_layer_content_render_tile(
+        tlc, pe->view_cs, y * render_params->xtiles + x);
+    DP_transient_tile_merge(tt, pe->checker, DP_BIT15, DP_BLEND_MODE_BEHIND);
+
+    DP_Tile *t = DP_transient_layer_content_tile_at_noinc(tlc, x, y);
+    DP_Pixel8 *pixel_buffer =
+        ((DP_Pixel8 *)pe->buffers) + DP_TILE_LENGTH * thread_index;
+    DP_pixels15_to_8(pixel_buffer, DP_tile_pixels(t), DP_TILE_LENGTH);
+
+    render_params->render_tile(render_params->user, x, y, pixel_buffer,
+                               thread_index);
+
+    DP_SEMAPHORE_MUST_POST(pe->render.tiles_done_sem);
+}
+
+
 DP_PaintEngine *
 DP_paint_engine_new_inc(DP_DrawContext *paint_dc, DP_DrawContext *preview_dc,
                         DP_AclState *acls, DP_CanvasState *cs_or_null,
                         DP_CanvasHistorySavePointFn save_point_fn,
                         void *save_point_user)
 {
-    DP_PaintEngine *pe = DP_malloc(sizeof(*pe));
+    int render_thread_count = DP_thread_cpu_count();
+    size_t flex_size = DP_max_size(sizeof(DP_PaintEngineLaserBuffer),
+                                   sizeof(DP_Pixel8[DP_TILE_LENGTH])
+                                       * DP_int_to_size(render_thread_count));
+    DP_PaintEngine *pe =
+        DP_malloc(DP_FLEX_SIZEOF(DP_PaintEngine, buffers, flex_size));
+
     pe->acls = acls;
     pe->ch =
         DP_canvas_history_new_inc(cs_or_null, save_point_fn, save_point_user);
@@ -356,7 +390,12 @@ DP_paint_engine_new_inc(DP_DrawContext *paint_dc, DP_DrawContext *preview_dc,
     DP_atomic_set(&pe->running, true);
     DP_atomic_set(&pe->catchup, -1);
     DP_atomic_ptr_set(&pe->next_preview, NULL);
-    pe->thread = DP_thread_new(run_paint_engine, pe);
+    pe->paint_thread = DP_thread_new(run_paint_engine, pe);
+    pe->render.worker =
+        DP_worker_new(1024, sizeof(struct DP_PaintEngineRenderJobParams),
+                      render_thread_count, render_job);
+    pe->render.tiles_done_sem = DP_semaphore_new(0);
+    pe->render.tiles_waiting = 0;
     return pe;
 }
 
@@ -364,8 +403,10 @@ void DP_paint_engine_free_join(DP_PaintEngine *pe)
 {
     if (pe) {
         DP_atomic_set(&pe->running, false);
+        DP_semaphore_free(pe->render.tiles_done_sem);
+        DP_worker_free_join(pe->render.worker);
         DP_SEMAPHORE_MUST_POST(pe->queue_sem);
-        DP_thread_free_join(pe->thread);
+        DP_thread_free_join(pe->paint_thread);
         DP_mutex_free(pe->queue_mutex);
         DP_semaphore_free(pe->queue_sem);
         free_preview(DP_atomic_ptr_xch(&pe->next_preview, NULL));
@@ -393,6 +434,12 @@ void DP_paint_engine_free_join(DP_PaintEngine *pe)
         DP_canvas_history_free(pe->ch);
         DP_free(pe);
     }
+}
+
+int DP_paint_engine_render_thread_count(DP_PaintEngine *pe)
+{
+    DP_ASSERT(pe);
+    return DP_worker_thread_count(pe->render.worker);
 }
 
 DP_TransientLayerContent *
@@ -467,10 +514,15 @@ static bool is_internal_or_command(DP_MessageType type)
     return type >= 128 || type == DP_MSG_INTERNAL;
 }
 
+static DP_PaintEngineMetaBuffer *get_meta_buffer(DP_PaintEngine *pe)
+{
+    return (DP_PaintEngineMetaBuffer *)pe->buffers;
+}
+
 static void handle_laser_trail(DP_PaintEngine *pe, DP_Message *msg)
 {
     uint8_t context_id = DP_uint_to_uint8(DP_message_context_id(msg));
-    DP_PaintEngineLaserChanges *laser = &pe->meta_buffer.laser_changes;
+    DP_PaintEngineLaserChanges *laser = &get_meta_buffer(pe)->laser_changes;
 
     int laser_count = laser->count;
     if (laser_count == 0) {
@@ -494,7 +546,7 @@ static void handle_laser_trail(DP_PaintEngine *pe, DP_Message *msg)
 static void handle_move_pointer(DP_PaintEngine *pe, DP_Message *msg)
 {
     uint8_t context_id = DP_uint_to_uint8(DP_message_context_id(msg));
-    DP_PaintEngineCursorChanges *cursor = &pe->meta_buffer.cursor_changes;
+    DP_PaintEngineCursorChanges *cursor = &get_meta_buffer(pe)->cursor_changes;
 
     int cursor_count = cursor->count;
     if (cursor_count == 0) {
@@ -516,14 +568,15 @@ static void handle_move_pointer(DP_PaintEngine *pe, DP_Message *msg)
 static void handle_default_layer(DP_PaintEngine *pe, DP_Message *msg)
 {
     DP_MsgDefaultLayer *mdl = DP_msg_default_layer_cast(msg);
-    pe->meta_buffer.have_default_layer = true;
-    pe->meta_buffer.default_layer = DP_msg_default_layer_id(mdl);
+    DP_PaintEngineMetaBuffer *meta_buffer = get_meta_buffer(pe);
+    meta_buffer->have_default_layer = true;
+    meta_buffer->default_layer = DP_msg_default_layer_id(mdl);
 }
 
 static bool should_push_message_remote(DP_PaintEngine *pe, DP_Message *msg)
 {
     uint8_t result = DP_acl_state_handle(pe->acls, msg);
-    pe->meta_buffer.acl_change_flags |= result;
+    get_meta_buffer(pe)->acl_change_flags |= result;
     if (!(result & DP_ACL_STATE_FILTERED_BIT)) {
         DP_MessageType type = DP_message_type(msg);
         if (is_internal_or_command(type)) {
@@ -583,10 +636,11 @@ int DP_paint_engine_handle_inc(
     bool (*should_push)(DP_PaintEngine *, DP_Message *) =
         local ? should_push_message_local : should_push_message_remote;
 
-    pe->meta_buffer.acl_change_flags = 0;
-    pe->meta_buffer.laser_changes.count = 0;
-    pe->meta_buffer.cursor_changes.count = 0;
-    pe->meta_buffer.have_default_layer = false;
+    DP_PaintEngineMetaBuffer *meta_buffer = get_meta_buffer(pe);
+    meta_buffer->acl_change_flags = 0;
+    meta_buffer->laser_changes.count = 0;
+    meta_buffer->cursor_changes.count = 0;
+    meta_buffer->have_default_layer = false;
 
     // Don't lock anything until we actually find a message to push.
     int pushed = 0;
@@ -600,12 +654,12 @@ int DP_paint_engine_handle_inc(
     }
 
     int acl_change_flags =
-        pe->meta_buffer.acl_change_flags & DP_ACL_STATE_CHANGE_MASK;
+        meta_buffer->acl_change_flags & DP_ACL_STATE_CHANGE_MASK;
     if (acl_change_flags != 0) {
         acls_changed(user, acl_change_flags);
     }
 
-    DP_PaintEngineLaserChanges *laser = &pe->meta_buffer.laser_changes;
+    DP_PaintEngineLaserChanges *laser = &meta_buffer->laser_changes;
     int laser_count = laser->count;
     for (int i = 0; i < laser_count; ++i) {
         uint8_t context_id = laser->users[i];
@@ -614,7 +668,7 @@ int DP_paint_engine_handle_inc(
         laser_trail(user, context_id, lb->persistence, pixel.color);
     }
 
-    DP_PaintEngineCursorChanges *cursor = &pe->meta_buffer.cursor_changes;
+    DP_PaintEngineCursorChanges *cursor = &meta_buffer->cursor_changes;
     int cursor_count = cursor->count;
     for (int i = 0; i < cursor_count; ++i) {
         uint8_t context_id = cursor->users[i];
@@ -623,8 +677,8 @@ int DP_paint_engine_handle_inc(
                      DP_int32_to_int(cp->y));
     }
 
-    if (pe->meta_buffer.have_default_layer) {
-        default_layer_set(user, pe->meta_buffer.default_layer);
+    if (meta_buffer->have_default_layer) {
+        default_layer_set(user, meta_buffer->default_layer);
     }
 
     return pushed;
@@ -794,7 +848,7 @@ void DP_paint_engine_tick(
     }
 
     DP_CanvasState *prev_history_cs = pe->history_cs;
-    DP_UserCursorBuffer *ucb = &pe->tick_buffer.cursors;
+    DP_UserCursorBuffer *ucb = (DP_UserCursorBuffer *)pe->buffers;
     DP_CanvasState *next_history_cs =
         DP_canvas_history_compare_and_get(pe->ch, prev_history_cs, ucb);
     if (next_history_cs) {
@@ -848,22 +902,24 @@ void DP_paint_engine_prepare_render(DP_PaintEngine *pe,
 static void render_pos(void *user, int x, int y)
 {
     struct DP_PaintEngineRenderParams *params = user;
-
     DP_PaintEngine *pe = params->pe;
-    DP_TransientLayerContent *tlc = pe->tlc;
-    DP_TransientTile *tt = DP_transient_layer_content_render_tile(
-        tlc, pe->view_cs, y * params->xtiles + x);
-    DP_transient_tile_merge(tt, pe->checker, DP_BIT15, DP_BLEND_MODE_BEHIND);
-
-    DP_Tile *t = DP_transient_layer_content_tile_at_noinc(tlc, x, y);
-    DP_Pixel8 *pixel_buffer = pe->pixel_buffer;
-    DP_pixels15_to_8(pixel_buffer, DP_tile_pixels(t), DP_TILE_LENGTH);
-
-    params->render_tile(params->user, x, y, pixel_buffer);
+    ++pe->render.tiles_waiting;
+    struct DP_PaintEngineRenderJobParams job_params = {params, x, y};
+    DP_worker_push(pe->render.worker, &job_params);
 }
 
-void DP_paint_engine_render(DP_PaintEngine *pe,
-                            DP_PaintEngineRenderTileFn render_tile, void *user)
+static void wait_for_render(DP_PaintEngine *pe)
+{
+    int n = pe->render.tiles_waiting;
+    if (n != 0) {
+        pe->render.tiles_waiting = 0;
+        DP_SEMAPHORE_MUST_WAIT_N(pe->render.tiles_done_sem, n);
+    }
+}
+
+void DP_paint_engine_render_everything(DP_PaintEngine *pe,
+                                       DP_PaintEngineRenderTileFn render_tile,
+                                       void *user)
 {
     DP_ASSERT(pe);
     DP_ASSERT(render_tile);
@@ -871,6 +927,24 @@ void DP_paint_engine_render(DP_PaintEngine *pe,
         pe, DP_tile_count_round(DP_canvas_state_width(pe->view_cs)),
         render_tile, user};
     DP_canvas_diff_each_pos_reset(pe->diff, render_pos, &params);
+    wait_for_render(pe);
+}
+
+void DP_paint_engine_render_tile_bounds(DP_PaintEngine *pe, int tile_left,
+                                        int tile_top, int tile_right,
+                                        int tile_bottom,
+                                        DP_PaintEngineRenderTileFn render_tile,
+                                        void *user)
+{
+    DP_ASSERT(pe);
+    DP_ASSERT(render_tile);
+    struct DP_PaintEngineRenderParams params = {
+        pe, DP_tile_count_round(DP_canvas_state_width(pe->view_cs)),
+        render_tile, user};
+    DP_canvas_diff_each_pos_tile_bounds_reset(pe->diff, tile_left, tile_top,
+                                              tile_right, tile_bottom,
+                                              render_pos, &params);
+    wait_for_render(pe);
 }
 
 

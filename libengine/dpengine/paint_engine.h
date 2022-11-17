@@ -37,7 +37,7 @@ typedef void (*DP_PaintEngineCursorMovedFn)(void *user, unsigned int context_id,
                                             int layer_id, int x, int y);
 typedef void (*DP_PaintEngineRenderSizeFn)(void *user, int width, int height);
 typedef void (*DP_PaintEngineRenderTileFn)(void *user, int x, int y,
-                                           DP_Pixel8 *pixels);
+                                           DP_Pixel8 *pixels, int thread_index);
 
 
 typedef struct DP_PaintEngine DP_PaintEngine;
@@ -49,6 +49,8 @@ DP_paint_engine_new_inc(DP_DrawContext *paint_dc, DP_DrawContext *preview_dc,
                         void *save_point_user);
 
 void DP_paint_engine_free_join(DP_PaintEngine *pe);
+
+int DP_paint_engine_render_thread_count(DP_PaintEngine *pe);
 
 DP_TransientLayerContent *
 DP_paint_engine_render_content_noinc(DP_PaintEngine *pe);
@@ -79,8 +81,15 @@ void DP_paint_engine_prepare_render(DP_PaintEngine *pe,
                                     DP_PaintEngineRenderSizeFn render_size,
                                     void *user);
 
-void DP_paint_engine_render(DP_PaintEngine *pe,
-                            DP_PaintEngineRenderTileFn render_tile, void *user);
+void DP_paint_engine_render_everything(DP_PaintEngine *pe,
+                                       DP_PaintEngineRenderTileFn render_tile,
+                                       void *user);
+
+void DP_paint_engine_render_tile_bounds(DP_PaintEngine *pe, int tile_left,
+                                        int tile_top, int tile_right,
+                                        int tile_bottom,
+                                        DP_PaintEngineRenderTileFn render_tile,
+                                        void *user);
 
 void DP_paint_engine_preview_cut(DP_PaintEngine *pe, int layer_id, int x, int y,
                                  int width, int height,
