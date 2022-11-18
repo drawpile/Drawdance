@@ -28,6 +28,7 @@
 #include <dpcommon/binary.h>
 #include <dpcommon/common.h>
 #include <dpcommon/conversions.h>
+#include <dpmsg/blend_mode.h>
 
 
 #ifdef DP_NO_STRICT_ALIASING
@@ -35,6 +36,7 @@
 struct DP_Tile {
     DP_Atomic refcount;
     const bool transient;
+    const bool maybe_blank;
     const unsigned int context_id;
     DP_Pixel15 pixels[DP_TILE_LENGTH];
 };
@@ -42,6 +44,7 @@ struct DP_Tile {
 struct DP_TransientTile {
     DP_Atomic refcount;
     bool transient;
+    bool maybe_blank;
     unsigned int context_id;
     DP_Pixel15 pixels[DP_TILE_LENGTH];
 };
@@ -51,6 +54,7 @@ struct DP_TransientTile {
 struct DP_Tile {
     DP_Atomic refcount;
     bool transient;
+    bool maybe_blank;
     unsigned int context_id;
     DP_Pixel15 pixels[DP_TILE_LENGTH];
 };
@@ -58,11 +62,13 @@ struct DP_Tile {
 #endif
 
 
-static void *alloc_tile(bool transient, unsigned int context_id)
+static void *alloc_tile(bool transient, bool maybe_blank,
+                        unsigned int context_id)
 {
     DP_TransientTile *tt = DP_malloc(sizeof(*tt));
     DP_atomic_set(&tt->refcount, 1);
     tt->transient = transient;
+    tt->maybe_blank = maybe_blank;
     tt->context_id = context_id;
     return tt;
 }
@@ -75,7 +81,7 @@ DP_Tile *DP_tile_new(unsigned int context_id)
 
 DP_Tile *DP_tile_new_from_pixel15(unsigned int context_id, DP_Pixel15 pixel)
 {
-    DP_TransientTile *tt = alloc_tile(false, context_id);
+    DP_TransientTile *tt = alloc_tile(false, pixel.a == 0, context_id);
     for (int i = 0; i < DP_TILE_LENGTH; ++i) {
         tt->pixels[i] = pixel;
     }
@@ -90,7 +96,7 @@ DP_Tile *DP_tile_new_from_upixel15(unsigned int context_id, DP_UPixel15 pixel)
 DP_Tile *DP_tile_new_from_pixels8(unsigned int context_id,
                                   const DP_Pixel8 *pixels)
 {
-    DP_TransientTile *tt = alloc_tile(false, context_id);
+    DP_TransientTile *tt = alloc_tile(false, true, context_id);
     DP_pixels8_to_15(tt->pixels, pixels, DP_TILE_LENGTH);
     return (DP_Tile *)tt;
 }
@@ -111,7 +117,7 @@ static unsigned char *get_inflate_output_buffer(size_t out_size, void *user)
 {
     if (out_size == DP_TILE_COMPRESSED_BYTES) {
         struct DP_TileInflateArgs *args = user;
-        args->tt = alloc_tile(false, args->context_id);
+        args->tt = alloc_tile(false, true, args->context_id);
         return (unsigned char *)args->buffer;
     }
     else {
@@ -153,7 +159,8 @@ DP_Tile *DP_tile_new_from_compressed(DP_DrawContext *dc,
 DP_Tile *DP_tile_new_checker(unsigned int context_id, DP_Pixel15 pixel1,
                              DP_Pixel15 pixel2)
 {
-    DP_TransientTile *tt = alloc_tile(true, context_id);
+    DP_TransientTile *tt =
+        alloc_tile(true, pixel1.a == 0 && pixel2.a == 0, context_id);
     int half = DP_TILE_SIZE / 2;
     for (int y = 0; y < half; ++y) {
         for (int x = 0; x < half; ++x) {
@@ -169,7 +176,8 @@ DP_Tile *DP_tile_new_checker(unsigned int context_id, DP_Pixel15 pixel1,
 DP_Tile *DP_tile_new_zebra(unsigned int context_id, DP_Pixel15 pixel1,
                            DP_Pixel15 pixel2)
 {
-    DP_TransientTile *tt = alloc_tile(true, context_id);
+    DP_TransientTile *tt =
+        alloc_tile(true, pixel1.a == 0 && pixel2.a == 0, context_id);
     for (int i = 0; i < DP_TILE_LENGTH; ++i) {
         tt->pixels[i] = ((i / DP_TILE_SIZE + i % DP_TILE_SIZE) / 16) % 2 == 0
                           ? pixel1
@@ -280,13 +288,8 @@ DP_Pixel15 DP_tile_pixel_at(DP_Tile *tile, int x, int y)
 
 bool DP_tile_blank(DP_Tile *tile)
 {
-    DP_Pixel15 *pixels = DP_tile_pixels(tile);
-    for (int i = 0; i < DP_TILE_LENGTH; ++i) {
-        if (pixels[i].a != 0) {
-            return false;
-        }
-    }
-    return true;
+    static const DP_Pixel15 blank_pixels[DP_TILE_LENGTH];
+    return memcmp(tile->pixels, blank_pixels, DP_TILE_BYTES) == 0;
 }
 
 bool DP_tile_same_pixel(DP_Tile *tile_or_null, DP_Pixel15 *out_pixel)
@@ -389,7 +392,7 @@ DP_TransientTile *DP_transient_tile_new(DP_Tile *tile, unsigned int context_id)
 {
     DP_ASSERT(tile);
     DP_ASSERT(DP_atomic_get(&tile->refcount) > 0);
-    DP_TransientTile *tt = alloc_tile(true, context_id);
+    DP_TransientTile *tt = alloc_tile(true, tile->maybe_blank, context_id);
     memcpy(tt->pixels, tile->pixels, DP_TILE_BYTES);
     return tt;
 }
@@ -491,6 +494,9 @@ void DP_transient_tile_pixel_at_set(DP_TransientTile *tt, int x, int y,
     DP_ASSERT(y >= 0);
     DP_ASSERT(x < DP_TILE_SIZE);
     DP_ASSERT(y < DP_TILE_SIZE);
+    if (pixel.a == 0) {
+        tt->maybe_blank = true;
+    }
     tt->pixels[y * DP_TILE_SIZE + x] = pixel;
 }
 
@@ -504,8 +510,33 @@ void DP_transient_tile_pixel_at_put(DP_TransientTile *tt, int blend_mode, int x,
     DP_ASSERT(y >= 0);
     DP_ASSERT(x < DP_TILE_SIZE);
     DP_ASSERT(y < DP_TILE_SIZE);
+    if (DP_blend_mode_can_decrease_opacity(blend_mode)) {
+        tt->maybe_blank = true;
+    }
     DP_blend_pixels(&tt->pixels[y * DP_TILE_SIZE + x], &pixel, 1, DP_BIT15,
                     blend_mode);
+}
+
+bool DP_transient_tile_blank(DP_TransientTile *tt)
+{
+    DP_ASSERT(tt);
+    DP_ASSERT(DP_atomic_get(&tt->refcount) > 0);
+    DP_ASSERT(tt->transient);
+    if (tt->maybe_blank) {
+        bool blank = DP_tile_blank((DP_Tile *)tt);
+        if (!blank) {
+            tt->maybe_blank = false;
+        }
+        return blank;
+    }
+    else {
+#ifndef NDEBUG
+        if (DP_tile_blank((DP_Tile *)tt)) {
+            DP_warn("Tile maybe_blank is false, but is actually blank");
+        }
+#endif
+        return false;
+    }
 }
 
 void DP_transient_tile_merge(DP_TransientTile *DP_RESTRICT tt,
@@ -514,6 +545,9 @@ void DP_transient_tile_merge(DP_TransientTile *DP_RESTRICT tt,
 {
     DP_ASSERT(tt);
     DP_ASSERT(t);
+    if (DP_blend_mode_can_decrease_opacity(blend_mode)) {
+        tt->maybe_blank = true;
+    }
     DP_blend_pixels(tt->pixels, t->pixels, DP_TILE_LENGTH, opacity, blend_mode);
 }
 
@@ -543,6 +577,9 @@ void DP_transient_tile_brush_apply(DP_TransientTile *tt, DP_UPixel15 src,
     DP_ASSERT(y < DP_TILE_SIZE);
     DP_ASSERT(x + w <= DP_TILE_SIZE);
     DP_ASSERT(y + h <= DP_TILE_SIZE);
+    if (DP_blend_mode_can_decrease_opacity(blend_mode)) {
+        tt->maybe_blank = true;
+    }
     DP_blend_mask(tt->pixels + y * DP_TILE_SIZE + x, src, blend_mode, mask,
                   opacity, w, h, skip, DP_TILE_SIZE - w);
 }

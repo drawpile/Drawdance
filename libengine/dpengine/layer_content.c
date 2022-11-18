@@ -722,6 +722,27 @@ static DP_TransientLayerContent *alloc_layer_content(int width, int height)
     return tlc;
 }
 
+static DP_TransientTile *get_transient_tile(DP_TransientLayerContent *tlc,
+                                            unsigned int context_id, int i)
+{
+    DP_ASSERT(tlc);
+    DP_ASSERT(DP_atomic_get(&tlc->refcount) > 0);
+    DP_ASSERT(tlc->transient);
+    DP_ASSERT(i >= 0);
+    DP_ASSERT(i < DP_tile_total_round(tlc->width, tlc->height));
+    DP_Tile *t = tlc->elements[i].tile;
+    DP_ASSERT(t);
+    if (DP_tile_transient(t)) {
+        return (DP_TransientTile *)t;
+    }
+    else {
+        DP_TransientTile *tt = DP_transient_tile_new(t, context_id);
+        tlc->elements[i].transient_tile = tt;
+        DP_tile_decref(t);
+        return tt;
+    }
+}
+
 static DP_TransientTile *
 get_or_create_transient_tile(DP_TransientLayerContent *tlc,
                              unsigned int context_id, int i)
@@ -992,7 +1013,14 @@ DP_transient_layer_content_persist(DP_TransientLayerContent *tlc)
     for (int i = 0; i < count; ++i) {
         DP_Tile *tile = tlc->elements[i].tile;
         if (tile && DP_tile_transient(tile)) {
-            DP_transient_tile_persist(tlc->elements[i].transient_tile);
+            DP_TransientTile *tt = tlc->elements[i].transient_tile;
+            if (DP_transient_tile_blank(tt)) {
+                DP_transient_tile_decref(tt);
+                tlc->elements[i].transient_tile = NULL;
+            }
+            else {
+                DP_transient_tile_persist(tt);
+            }
         }
     }
     if (DP_layer_list_transient(tlc->sub.contents)) {
@@ -1097,22 +1125,9 @@ static DP_TransientTile *create_transient_tile(DP_TransientLayerContent *tlc,
     return tt;
 }
 
-static DP_TransientTile *get_transient_tile(DP_TransientLayerContent *tlc,
-                                            unsigned int context_id, int i)
+static bool can_blend_blank(int blend_mode, uint16_t opacity)
 {
-    DP_ASSERT(tlc);
-    DP_ASSERT(DP_atomic_get(&tlc->refcount) > 0);
-    DP_ASSERT(tlc->transient);
-    DP_ASSERT(i >= 0);
-    DP_ASSERT(i < DP_tile_total_round(tlc->width, tlc->height));
-    DP_Tile *tile = tlc->elements[i].tile;
-    DP_ASSERT(tile);
-    if (!DP_tile_transient(tile)) {
-        tlc->elements[i].transient_tile =
-            DP_transient_tile_new(tile, context_id);
-        DP_tile_decref(tile);
-    }
-    return tlc->elements[i].transient_tile;
+    return DP_blend_mode_blend_blank(blend_mode) && opacity != 0;
 }
 
 void DP_transient_layer_content_merge(DP_TransientLayerContent *tlc,
@@ -1128,8 +1143,7 @@ void DP_transient_layer_content_merge(DP_TransientLayerContent *tlc,
     DP_ASSERT(tlc->width == lc->width);
     DP_ASSERT(tlc->height == lc->height);
     int count = DP_tile_total_round(lc->width, lc->height);
-    DP_BlendModeBlankTileBehavior on_blank =
-        DP_blend_mode_blank_tile_behavior(blend_mode);
+    bool blend_blank = can_blend_blank(blend_mode, opacity);
     for (int i = 0; i < count; ++i) {
         DP_Tile *t = lc->elements[i].tile;
         if (t) {
@@ -1138,7 +1152,7 @@ void DP_transient_layer_content_merge(DP_TransientLayerContent *tlc,
                 DP_ASSERT((void *)tt != (void *)t);
                 DP_transient_tile_merge(tt, t, opacity, blend_mode);
             }
-            else if (on_blank == DP_BLEND_MODE_BLANK_TILE_BLEND) {
+            else if (blend_blank) {
                 // For blend modes like normal and behind, do regular blending.
                 DP_TransientTile *tt =
                     create_transient_tile(tlc, context_id, i);
@@ -1148,7 +1162,6 @@ void DP_transient_layer_content_merge(DP_TransientLayerContent *tlc,
                 // For most other blend modes merging with transparent pixels
                 // doesn't do anything. For example erasing nothing or multiply
                 // with nothing just leads to more nothing. Skip the empty tile.
-                DP_ASSERT(on_blank == DP_BLEND_MODE_BLANK_TILE_SKIP);
             }
         }
     }
@@ -1307,6 +1320,15 @@ void DP_transient_layer_content_put_image(DP_TransientLayerContent *tlc,
 }
 
 
+static bool can_blend_blank_pixel(int blend_mode, uint16_t opacity,
+                                  DP_UPixel15 pixel)
+{
+    return can_blend_blank(blend_mode, opacity)
+        && ((blend_mode != DP_BLEND_MODE_NORMAL_AND_ERASER
+             && blend_mode != DP_BLEND_MODE_REPLACE)
+            || pixel.a != 0);
+}
+
 // We want to initialize a static buffer with the same value 4096 times, so this
 // is a goofy way to achieve that at compile time without spelling it all out.
 #define DP_BIT15_4    DP_BIT15, DP_BIT15, DP_BIT15, DP_BIT15
@@ -1323,9 +1345,7 @@ static void fill_rect(DP_TransientLayerContent *tlc, unsigned int context_id,
     static const uint16_t mask[DP_TILE_LENGTH] = {DP_BIT15_4096};
 
     uint16_t opacity = pixel.a;
-    bool blend_blank = DP_blend_mode_blank_tile_behavior(blend_mode)
-                        != DP_BLEND_MODE_BLANK_TILE_SKIP
-                    && opacity != 0;
+    bool blend_blank = can_blend_blank_pixel(blend_mode, opacity, pixel);
 
     int tx_min = left / DP_TILE_SIZE;
     int tx_max = (right - 1) / DP_TILE_SIZE;
@@ -1428,7 +1448,7 @@ typedef void (*DP_ApplyBrushStampFn)(DP_TransientTile *tt, const uint16_t *mask,
 
 static void apply_brush_stamp_with(DP_TransientLayerContent *tlc,
                                    unsigned int context_id, uint16_t opacity,
-                                   DP_BrushStamp *stamp,
+                                   DP_BrushStamp *stamp, bool blend_blank,
                                    DP_ApplyBrushStampFn apply_fn, void *user)
 {
     DP_ASSERT(tlc);
@@ -1464,15 +1484,24 @@ static void apply_brush_stamp_with(DP_TransientLayerContent *tlc,
             int xindex = x / DP_TILE_SIZE;
             int xt = x - xindex * DP_TILE_SIZE;
             int wb = xt + d - xb < DP_TILE_SIZE ? d - xb : DP_TILE_SIZE - xt;
+            int mask_offset = yb * d + xb;
             int i = xtiles * yindex + xindex;
-
-            DP_TransientTile *tt =
-                get_or_create_transient_tile(tlc, context_id, i);
-            apply_fn(tt, mask + yb * d + xb, opacity, xt, yt, wb, hb, d - wb,
-                     user);
-
             x = (xindex + 1) * DP_TILE_SIZE;
             xb = xb + wb;
+
+            DP_TransientTile *tt;
+            if (tlc->elements[i].tile) {
+                tt = get_transient_tile(tlc, context_id, i);
+            }
+            else if (blend_blank) {
+                tt = create_transient_tile(tlc, context_id, i);
+            }
+            else {
+                continue;
+            }
+
+            apply_fn(tt, mask + mask_offset, opacity, xt, yt, wb, hb, d - wb,
+                     user);
         }
         y = (yindex + 1) * DP_TILE_SIZE;
         yb = yb + hb;
@@ -1499,8 +1528,9 @@ void DP_transient_layer_content_brush_stamp_apply(
     uint16_t opacity, int blend_mode, DP_BrushStamp *stamp)
 {
     struct DP_ApplyStampParams params = {pixel, blend_mode};
-    apply_brush_stamp_with(tlc, context_id, opacity, stamp, apply_stamp,
-                           &params);
+    apply_brush_stamp_with(tlc, context_id, opacity, stamp,
+                           can_blend_blank_pixel(blend_mode, opacity, pixel),
+                           apply_stamp, &params);
 }
 
 
@@ -1517,7 +1547,7 @@ void DP_transient_layer_content_brush_stamp_apply_posterize(
     DP_TransientLayerContent *tlc, unsigned int context_id, uint16_t opacity,
     int posterize_num, DP_BrushStamp *stamp)
 {
-    apply_brush_stamp_with(tlc, context_id, opacity, stamp,
+    apply_brush_stamp_with(tlc, context_id, opacity, stamp, true,
                            apply_stamp_posterize, &posterize_num);
 }
 
