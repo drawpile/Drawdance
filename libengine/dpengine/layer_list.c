@@ -403,8 +403,10 @@ DP_TransientTile *DP_layer_list_flatten_tile_to(DP_LayerList *ll,
                 uint16_t opacity =
                     DP_fix15_mul(parent_opacity, DP_layer_props_opacity(lp));
                 int blend_mode = DP_layer_props_blend_mode(lp);
+                bool censored = DP_layer_props_censored(lp);
                 tt = DP_layer_content_flatten_tile_to(lle->content, tile_index,
-                                                      tt, opacity, blend_mode);
+                                                      tt, opacity, blend_mode,
+                                                      censored);
             }
         }
     }

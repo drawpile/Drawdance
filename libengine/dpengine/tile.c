@@ -166,6 +166,34 @@ DP_Tile *DP_tile_new_checker(unsigned int context_id, DP_Pixel15 pixel1,
     return DP_transient_tile_persist(tt);
 }
 
+DP_Tile *DP_tile_new_zebra(unsigned int context_id, DP_Pixel15 pixel1,
+                           DP_Pixel15 pixel2)
+{
+    DP_TransientTile *tt = alloc_tile(true, context_id);
+    for (int i = 0; i < DP_TILE_LENGTH; ++i) {
+        tt->pixels[i] = ((i / DP_TILE_SIZE + i % DP_TILE_SIZE) / 16) % 2 == 0
+                          ? pixel1
+                          : pixel2;
+    }
+    return DP_transient_tile_persist(tt);
+}
+
+DP_Tile *DP_tile_censored_inc(void)
+{
+    DP_ATOMIC_DECLARE_STATIC_SPIN_LOCK(censor_tile_lock);
+    static DP_Tile *censor_tile;
+    if (!censor_tile) {
+        DP_atomic_lock(&censor_tile_lock);
+        if (!censor_tile) {
+            censor_tile =
+                DP_tile_new_zebra(0, (DP_Pixel15){4497, 4883, 5268, DP_BIT15},
+                                  (DP_Pixel15){30711, 30840, 30968, DP_BIT15});
+        }
+        DP_atomic_unlock(&censor_tile_lock);
+    }
+    return DP_tile_incref(censor_tile);
+}
+
 
 DP_Tile *DP_tile_incref(DP_Tile *tile)
 {

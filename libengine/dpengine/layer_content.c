@@ -181,7 +181,21 @@ static bool diff_tile(void *data, int tile_index)
     return a->elements[tile_index].tile != b->elements[tile_index].tile;
 }
 
-static void layer_content_diff(DP_LayerContent *lc, DP_LayerContent *prev_lc,
+static bool diff_tile_both_censored(void *data, int tile_index)
+{
+    DP_ASSERT(data);
+    DP_ASSERT(tile_index >= 0);
+    DP_LayerContent *a = ((DP_LayerContent **)data)[0];
+    DP_LayerContent *b = ((DP_LayerContent **)data)[1];
+    DP_ASSERT(tile_index < DP_tile_total_round(a->width, a->height));
+    DP_ASSERT(tile_index < DP_tile_total_round(b->width, b->height));
+    // When layers are censored, all non-blank tiles get turned into the
+    // same censor tile, so we just have to compare their null-ness.
+    return !a->elements[tile_index].tile != !b->elements[tile_index].tile;
+}
+
+static void layer_content_diff(DP_LayerContent *lc, bool censored,
+                               DP_LayerContent *prev_lc, bool prev_censored,
                                DP_CanvasDiff *diff)
 {
     DP_ASSERT(lc);
@@ -191,7 +205,17 @@ static void layer_content_diff(DP_LayerContent *lc, DP_LayerContent *prev_lc,
     DP_ASSERT(DP_atomic_get(&prev_lc->refcount) > 0);
     DP_ASSERT(lc->width == prev_lc->width);   // Different sizes could be
     DP_ASSERT(lc->height == prev_lc->height); // supported, but aren't yet.
-    DP_canvas_diff_check(diff, diff_tile, (DP_LayerContent *[]){lc, prev_lc});
+    if (!censored && !prev_censored) {
+        DP_canvas_diff_check(diff, diff_tile,
+                             (DP_LayerContent *[]){lc, prev_lc});
+    }
+    else if (censored && prev_censored) {
+        DP_canvas_diff_check(diff, diff_tile_both_censored,
+                             (DP_LayerContent *[]){lc, prev_lc});
+    }
+    else {
+        layer_content_diff_mark_both(lc, prev_lc, diff);
+    }
 }
 
 void DP_layer_content_diff(DP_LayerContent *lc, DP_LayerProps *lp,
@@ -207,7 +231,8 @@ void DP_layer_content_diff(DP_LayerContent *lc, DP_LayerProps *lp,
         layer_content_diff_mark_both(lc, prev_lc, diff);
     }
     else {
-        layer_content_diff(lc, prev_lc, diff);
+        layer_content_diff(lc, DP_layer_props_censored(lp), prev_lc,
+                           DP_layer_props_censored(prev_lp), diff);
     }
     DP_layer_list_diff(lc->sub.contents, lc->sub.props, prev_lc->sub.contents,
                        prev_lc->sub.props, diff);
@@ -628,15 +653,37 @@ static DP_Tile *flatten_tile(DP_LayerContent *lc, int tile_index)
     }
 }
 
-DP_TransientTile *DP_layer_content_flatten_tile_to(DP_LayerContent *lc,
-                                                   int tile_index,
-                                                   DP_TransientTile *tt_or_null,
-                                                   uint16_t opacity,
-                                                   int blend_mode)
+static DP_Tile *flatten_censored_tile(DP_LayerContent *lc, int tile_index)
+{
+    DP_ASSERT(tile_index >= 0);
+    DP_ASSERT(tile_index < DP_tile_total_round(lc->width, lc->height));
+    DP_Tile *t = lc->elements[tile_index].tile;
+    if (t) {
+        return DP_tile_censored_inc();
+    }
+    else {
+        DP_LayerList *ll = lc->sub.contents;
+        int sublayer_count = DP_layer_list_count(ll);
+        for (int i = 0; i < sublayer_count; ++i) {
+            DP_LayerContent *sub_lc = DP_layer_list_entry_content_noinc(
+                DP_layer_list_at_noinc(ll, i));
+            if (sub_lc->elements[tile_index].tile) {
+                return DP_tile_censored_inc();
+            }
+        }
+        return NULL;
+    }
+}
+
+DP_TransientTile *
+DP_layer_content_flatten_tile_to(DP_LayerContent *lc, int tile_index,
+                                 DP_TransientTile *tt_or_null, uint16_t opacity,
+                                 int blend_mode, bool censored)
 {
     DP_ASSERT(lc);
     DP_ASSERT(DP_atomic_get(&lc->refcount) > 0);
-    DP_Tile *t = flatten_tile(lc, tile_index);
+    DP_Tile *t = censored ? flatten_censored_tile(lc, tile_index)
+                          : flatten_tile(lc, tile_index);
     if (t) {
         DP_TransientTile *tt = DP_transient_tile_merge_nullable(
             tt_or_null, t, opacity, blend_mode);

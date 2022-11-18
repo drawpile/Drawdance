@@ -142,7 +142,7 @@ target_link_libraries(dpengine PUBLIC dpengine_archive dpengine_xml
                                       qgrayraster)
 
 if(ENABLE_HISTORY_DUMP)
-    target_compile_definitions(dpengine PRIVATE DRAWDANCE_HISTORY_DUMP)
+    target_compile_definitions(dpengine PUBLIC DRAWDANCE_HISTORY_DUMP)
 endif()
 
 if(BUILD_TESTS)

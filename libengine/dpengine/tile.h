@@ -106,6 +106,11 @@ DP_Tile *DP_tile_new_from_compressed(DP_DrawContext *dc,
 DP_Tile *DP_tile_new_checker(unsigned int context_id, DP_Pixel15 pixel1,
                              DP_Pixel15 pixel2);
 
+DP_Tile *DP_tile_new_zebra(unsigned int context_id, DP_Pixel15 pixel1,
+                           DP_Pixel15 pixel2);
+
+DP_Tile *DP_tile_censored_inc(void);
+
 DP_Tile *DP_tile_incref(DP_Tile *tile);
 
 DP_Tile *DP_tile_incref_nullable(DP_Tile *tile_or_null);
