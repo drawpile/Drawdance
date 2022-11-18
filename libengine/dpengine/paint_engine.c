@@ -526,13 +526,13 @@ static void handle_laser_trail(DP_PaintEngine *pe, DP_Message *msg)
 
     int laser_count = laser->count;
     if (laser_count == 0) {
-        memset(laser->active, 0, sizeof(laser->buffers));
+        memset(laser->active, 0, sizeof(laser->active));
         laser->users[0] = context_id;
         laser->count = 1;
     }
     else if (!laser->active[context_id]) {
         laser->active[context_id] = true;
-        laser->users[laser_count] = true;
+        laser->users[laser_count] = context_id;
         ++laser->count;
     }
 
@@ -556,7 +556,7 @@ static void handle_move_pointer(DP_PaintEngine *pe, DP_Message *msg)
     }
     else if (!cursor->active[context_id]) {
         cursor->active[context_id] = true;
-        cursor->users[cursor_count] = true;
+        cursor->users[cursor_count] = context_id;
         ++cursor->count;
     }
 

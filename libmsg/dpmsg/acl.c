@@ -237,14 +237,14 @@ static DP_AclState null_acl_state(void)
         {
             DP_ACCESS_TIER_GUEST,
             DP_ACCESS_TIER_GUEST,
+            DP_ACCESS_TIER_OPERATOR,
+            DP_ACCESS_TIER_OPERATOR,
+            DP_ACCESS_TIER_OPERATOR,
             DP_ACCESS_TIER_GUEST,
             DP_ACCESS_TIER_GUEST,
             DP_ACCESS_TIER_GUEST,
             DP_ACCESS_TIER_GUEST,
-            DP_ACCESS_TIER_GUEST,
-            DP_ACCESS_TIER_GUEST,
-            DP_ACCESS_TIER_GUEST,
-            DP_ACCESS_TIER_GUEST,
+            DP_ACCESS_TIER_OPERATOR,
             DP_ACCESS_TIER_GUEST,
         },
     };
@@ -292,7 +292,9 @@ void DP_acl_state_reset(DP_AclState *acls, uint8_t local_user_id)
     clear_layers(acls);
     clear_annotations(acls);
     *acls = null_acl_state();
-    DP_user_bit_set(acls->users.operators, local_user_id);
+    if (local_user_id != 0) {
+        DP_user_bit_set(acls->users.operators, local_user_id);
+    }
 }
 
 DP_UserAcls DP_acl_state_users(DP_AclState *acls)
