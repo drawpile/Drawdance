@@ -33,6 +33,7 @@ typedef void (*DP_PaintEngineAnnotationsChangedFn)(void *user,
                                                    DP_AnnotationList *al);
 typedef void (*DP_PaintEngineDocumentMetadataChangedFn)(
     void *user, DP_DocumentMetadata *dm);
+typedef void (*DP_PaintEngineTimelineChangedFn)(void *user, DP_Timeline *tl);
 typedef void (*DP_PaintEngineCursorMovedFn)(void *user, unsigned int context_id,
                                             int layer_id, int x, int y);
 typedef void (*DP_PaintEngineRenderSizeFn)(void *user, int width, int height);
@@ -97,6 +98,7 @@ void DP_paint_engine_tick(
     DP_PaintEngineLayerPropsChangedFn layer_props_changed,
     DP_PaintEngineAnnotationsChangedFn annotations_changed,
     DP_PaintEngineDocumentMetadataChangedFn document_metadata_changed,
+    DP_PaintEngineTimelineChangedFn timeline_changed,
     DP_PaintEngineCursorMovedFn cursor_moved, void *user);
 
 void DP_paint_engine_prepare_render(DP_PaintEngine *pe,

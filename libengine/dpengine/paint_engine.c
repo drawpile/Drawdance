@@ -1071,6 +1071,7 @@ void DP_paint_engine_tick(
     DP_PaintEngineLayerPropsChangedFn layer_props_changed,
     DP_PaintEngineAnnotationsChangedFn annotations_changed,
     DP_PaintEngineDocumentMetadataChangedFn document_metadata_changed,
+    DP_PaintEngineTimelineChangedFn timeline_changed,
     DP_PaintEngineCursorMovedFn cursor_moved, void *user)
 {
     DP_ASSERT(pe);

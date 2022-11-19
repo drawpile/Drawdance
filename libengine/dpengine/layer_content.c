@@ -595,16 +595,23 @@ DP_Pixel8 *DP_layer_content_to_pixels8(DP_LayerContent *lc, int x, int y,
 {
     DP_ASSERT(lc);
     DP_ASSERT(DP_atomic_get(&lc->refcount) > 0);
+    DP_ASSERT(width > 0);
+    DP_ASSERT(height > 0);
     DP_Pixel8 *pixels = DP_malloc_zeroed(sizeof(*pixels) * DP_int_to_size(width)
                                          * DP_int_to_size(height));
-    int effective_width = DP_min_int(lc->width - x, width);
-    int effective_height = DP_min_int(lc->height - y, height);
-    for (int i = DP_max_int(x, 0); i < effective_height; ++i) {
-        for (int j = DP_max_int(y, 0); j < effective_width; ++j) {
-            pixels[i * width + j] =
-                DP_pixel15_to_8(DP_layer_content_pixel_at(lc, x + j, y + i));
+    int left, top, right, bottom;
+    DP_rect_sides(
+        DP_rect_intersection(DP_rect_make(0, 0, lc->width, lc->height),
+                             DP_rect_make(x, y, width, height)),
+        &left, &top, &right, &bottom);
+
+    for (int yy = top; yy <= bottom; ++yy) {
+        for (int xx = left; xx <= right; ++xx) {
+            pixels[(yy - y) * width + (xx - x)] =
+                DP_pixel15_to_8(DP_layer_content_pixel_at(lc, xx, yy));
         }
     }
+
     return pixels;
 }
 
