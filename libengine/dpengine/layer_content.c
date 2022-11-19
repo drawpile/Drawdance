@@ -227,15 +227,27 @@ void DP_layer_content_diff(DP_LayerContent *lc, DP_LayerProps *lp,
     DP_ASSERT(prev_lc);
     DP_ASSERT(prev_lp);
     DP_ASSERT(diff);
-    if (DP_layer_props_differ(lp, prev_lp)) {
-        layer_content_diff_mark_both(lc, prev_lc, diff);
+    bool visible = DP_layer_props_visible(lp);
+    bool prev_visible = DP_layer_props_visible(prev_lp);
+    if (visible) {
+        if (prev_visible) {
+            if (DP_layer_props_differ(lp, prev_lp)) {
+                layer_content_diff_mark_both(lc, prev_lc, diff);
+            }
+            else {
+                layer_content_diff(lc, DP_layer_props_censored(lp), prev_lc,
+                                   DP_layer_props_censored(prev_lp), diff);
+            }
+            DP_layer_list_diff(lc->sub.contents, lc->sub.props,
+                               prev_lc->sub.contents, prev_lc->sub.props, diff);
+        }
+        else {
+            DP_layer_content_diff_mark(lc, diff);
+        }
     }
-    else {
-        layer_content_diff(lc, DP_layer_props_censored(lp), prev_lc,
-                           DP_layer_props_censored(prev_lp), diff);
+    else if (prev_visible) {
+        DP_layer_content_diff_mark(prev_lc, diff);
     }
-    DP_layer_list_diff(lc->sub.contents, lc->sub.props, prev_lc->sub.contents,
-                       prev_lc->sub.props, diff);
 }
 
 static bool mark(void *data, int tile_index)
@@ -583,16 +595,12 @@ DP_Pixel8 *DP_layer_content_to_pixels8(DP_LayerContent *lc, int x, int y,
 {
     DP_ASSERT(lc);
     DP_ASSERT(DP_atomic_get(&lc->refcount) > 0);
-    DP_ASSERT(x >= 0);
-    DP_ASSERT(y >= 0);
-    DP_ASSERT(width > 0);
-    DP_ASSERT(height > 0);
-    DP_ASSERT(width <= lc->width - x);
-    DP_ASSERT(height <= lc->height - y);
-    DP_Pixel8 *pixels = DP_malloc(sizeof(*pixels) * DP_int_to_size(width)
-                                  * DP_int_to_size(height));
-    for (int i = 0; i < height; ++i) {
-        for (int j = 0; j < width; ++j) {
+    DP_Pixel8 *pixels = DP_malloc_zeroed(sizeof(*pixels) * DP_int_to_size(width)
+                                         * DP_int_to_size(height));
+    int effective_width = DP_min_int(lc->width - x, width);
+    int effective_height = DP_min_int(lc->height - y, height);
+    for (int i = DP_max_int(x, 0); i < effective_height; ++i) {
+        for (int j = DP_max_int(y, 0); j < effective_width; ++j) {
             pixels[i * width + j] =
                 DP_pixel15_to_8(DP_layer_content_pixel_at(lc, x + j, y + i));
         }
@@ -1419,10 +1427,25 @@ void DP_transient_layer_content_fill_rect(DP_TransientLayerContent *tlc,
     }
 }
 
-void DP_transient_layer_content_put_tile(DP_TransientLayerContent *tlc,
-                                         DP_Tile *tile, int x, int y,
-                                         int repeat)
+void DP_transient_layer_content_tile_set_noinc(DP_TransientLayerContent *tlc,
+                                               DP_Tile *tile, int i)
 {
+    DP_ASSERT(tlc);
+    DP_ASSERT(DP_atomic_get(&tlc->refcount) > 0);
+    DP_ASSERT(tlc->transient);
+    DP_ASSERT(i < DP_tile_total_round(tlc->width, tlc->height));
+    DP_tile_decref_nullable(tlc->elements[i].tile);
+    tlc->elements[i].tile = tile;
+}
+
+void DP_transient_layer_content_put_tile_inc(DP_TransientLayerContent *tlc,
+                                             DP_Tile *tile, int x, int y,
+                                             int repeat)
+{
+    DP_ASSERT(tlc);
+    DP_ASSERT(DP_atomic_get(&tlc->refcount) > 0);
+    DP_ASSERT(tlc->transient);
+
     DP_TileCounts tile_counts = DP_tile_counts_round(tlc->width, tlc->height);
     int tile_total = tile_counts.x * tile_counts.y;
     int start = y * tile_counts.x + x;

@@ -40,13 +40,6 @@ typedef struct DP_Timeline DP_Timeline;
 #define DP_FLAT_IMAGE_INCLUDE_BACKGROUND (1 << 0)
 #define DP_FLAT_IMAGE_INCLUDE_SUBLAYERS  (1 << 1)
 
-typedef enum DP_LayerViewMode {
-    DP_LAYER_VIEW_MODE_NORMAL,
-    DP_LAYER_VIEW_MODE_SOLO,
-    DP_LAYER_VIEW_MODE_FRAME,
-    DP_LAYER_VIEW_MODE_ONION_SKIN,
-} DP_LayerViewMode;
-
 typedef struct DP_CanvasState DP_CanvasState;
 
 typedef struct DP_UserCursor {
@@ -144,6 +137,8 @@ int DP_canvas_state_search_change_bounds(DP_CanvasState *cs,
 
 int DP_canvas_state_pick_layer(DP_CanvasState *cs, int x, int y);
 
+unsigned int DP_canvas_state_pick_context_id(DP_CanvasState *cs, int x, int y);
+
 DP_TransientLayerContent *DP_canvas_state_to_flat_layer(DP_CanvasState *cs,
                                                         unsigned int flags);
 
@@ -212,6 +207,9 @@ DP_transient_canvas_state_layers_noinc(DP_TransientCanvasState *tcs);
 
 DP_LayerPropsList *
 DP_transient_canvas_state_layer_props_noinc(DP_TransientCanvasState *tcs);
+
+DP_LayerRoutes *
+DP_transient_canvas_state_layer_routes_noinc(DP_TransientCanvasState *tcs);
 
 void DP_transient_canvas_state_transient_layers_set_noinc(
     DP_TransientCanvasState *tcs, DP_TransientLayerList *tll);

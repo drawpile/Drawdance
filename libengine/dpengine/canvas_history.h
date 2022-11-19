@@ -64,6 +64,10 @@ void DP_canvas_history_soft_reset(DP_CanvasHistory *ch);
 
 bool DP_canvas_history_snapshot(DP_CanvasHistory *ch);
 
+// Cleans up after disconnecting from a remote session: the local fork is merged
+// into the mainline history and all sublayers are merged into their parents.
+void DP_canvas_history_cleanup(DP_CanvasHistory *ch, DP_DrawContext *dc);
+
 bool DP_canvas_history_handle(DP_CanvasHistory *ch, DP_DrawContext *dc,
                               DP_Message *msg);
 

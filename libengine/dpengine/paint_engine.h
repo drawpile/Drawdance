@@ -39,6 +39,13 @@ typedef void (*DP_PaintEngineRenderSizeFn)(void *user, int width, int height);
 typedef void (*DP_PaintEngineRenderTileFn)(void *user, int x, int y,
                                            DP_Pixel8 *pixels, int thread_index);
 
+typedef enum DP_LayerViewMode {
+    DP_LAYER_VIEW_MODE_NORMAL,
+    DP_LAYER_VIEW_MODE_SOLO,
+    DP_LAYER_VIEW_MODE_FRAME,
+    DP_LAYER_VIEW_MODE_ONION_SKIN,
+} DP_LayerViewMode;
+
 
 typedef struct DP_PaintEngine DP_PaintEngine;
 
@@ -57,6 +64,21 @@ DP_paint_engine_render_content_noinc(DP_PaintEngine *pe);
 
 void DP_paint_engine_local_drawing_in_progress_set(
     DP_PaintEngine *pe, bool local_drawing_in_progress);
+
+void DP_paint_engine_active_layer_id_set(DP_PaintEngine *pe, int layer_id);
+
+void DP_paint_engine_active_frame_index_set(DP_PaintEngine *pe,
+                                            int frame_index);
+
+void DP_paint_engine_view_mode_set(DP_PaintEngine *pe, DP_LayerViewMode mode);
+
+bool DP_paint_engine_reveal_censored(DP_PaintEngine *pe);
+
+void DP_paint_engine_reveal_censored_set(DP_PaintEngine *pe,
+                                         bool reveal_censored);
+
+void DP_paint_engine_inspect_context_id_set(DP_PaintEngine *pe,
+                                            unsigned int context_id);
 
 void DP_paint_engine_layer_visibility_set(DP_PaintEngine *pe, int layer_id,
                                           bool hidden);

@@ -120,17 +120,30 @@ void DP_layer_group_diff(DP_LayerGroup *lg, DP_LayerProps *lp,
     DP_ASSERT(DP_atomic_get(&prev_lg->refcount) > 0);
     DP_ASSERT(prev_lp);
     DP_ASSERT(diff);
-    if (DP_layer_props_differ(lp, prev_lp)) {
-        DP_layer_list_diff_mark(lg->children, diff);
-        DP_layer_list_diff_mark(prev_lg->children, diff);
+    bool visible = DP_layer_props_visible(lp);
+    bool prev_visible = DP_layer_props_visible(prev_lp);
+    if (visible) {
+        if (prev_visible) {
+            if (DP_layer_props_differ(lp, prev_lp)) {
+                DP_layer_list_diff_mark(lg->children, diff);
+                DP_layer_list_diff_mark(prev_lg->children, diff);
+            }
+            else {
+                DP_LayerPropsList *lpl = DP_layer_props_children_noinc(lp);
+                DP_ASSERT(lpl);
+                DP_LayerPropsList *prev_lpl =
+                    DP_layer_props_children_noinc(prev_lp);
+                DP_ASSERT(prev_lpl);
+                DP_layer_list_diff(lg->children, lpl, prev_lg->children,
+                                   prev_lpl, diff);
+            }
+        }
+        else {
+            DP_layer_list_diff_mark(lg->children, diff);
+        }
     }
-    else {
-        DP_LayerPropsList *lpl = DP_layer_props_children_noinc(lp);
-        DP_ASSERT(lpl);
-        DP_LayerPropsList *prev_lpl = DP_layer_props_children_noinc(prev_lp);
-        DP_ASSERT(prev_lpl);
-        DP_layer_list_diff(lg->children, lpl, prev_lg->children, prev_lpl,
-                           diff);
+    else if (prev_visible) {
+        DP_layer_list_diff_mark(prev_lg->children, diff);
     }
 }
 

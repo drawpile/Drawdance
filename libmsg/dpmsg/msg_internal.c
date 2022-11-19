@@ -115,6 +115,12 @@ DP_Message *DP_msg_internal_catchup_new(unsigned int context_id, int progress)
     return msg;
 }
 
+DP_Message *DP_msg_internal_cleanup_new(unsigned int context_id)
+{
+    return msg_internal_new(context_id, DP_MSG_INTERNAL_TYPE_CLEANUP,
+                            sizeof(DP_MsgInternal));
+}
+
 DP_Message *DP_msg_internal_preview_new(unsigned int context_id, void *data)
 {
     DP_Message *msg = msg_internal_new(context_id, DP_MSG_INTERNAL_TYPE_PREVIEW,

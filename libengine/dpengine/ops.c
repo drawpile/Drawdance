@@ -1008,7 +1008,7 @@ DP_CanvasState *DP_ops_put_tile(DP_CanvasState *cs, DP_Tile *tile, int layer_id,
                                                       NULL);
     }
 
-    DP_transient_layer_content_put_tile(target, tile, x, y, repeat);
+    DP_transient_layer_content_put_tile_inc(target, tile, x, y, repeat);
 
     return DP_transient_canvas_state_persist(tcs);
 }
@@ -1020,37 +1020,53 @@ typedef struct DP_PenUpContext {
     DP_TransientCanvasState *tcs;
 } DP_PenUpContext;
 
-static void pen_up_merge_sublayer(DP_PenUpContext *puc, DP_DrawContext *dc,
-                                  int sublayer_index)
+static DP_TransientLayerContent *
+pen_up_merge_sublayer(DP_PenUpContext *puc, DP_DrawContext *dc,
+                      DP_TransientLayerContent *tlc, int sublayer_index)
 {
-    if (!puc->tcs) {
-        puc->tcs = DP_transient_canvas_state_new(puc->cs);
+    if (!tlc) {
+        if (!puc->tcs) {
+            puc->tcs = DP_transient_canvas_state_new(puc->cs);
+        }
+        int index_count;
+        int *indexes = DP_draw_context_layer_indexes(dc, &index_count);
+        tlc = DP_layer_routes_entry_indexes_transient_content(
+            index_count, indexes, puc->tcs);
     }
-    int index_count;
-    int *indexes = DP_draw_context_layer_indexes(dc, &index_count);
-    DP_TransientLayerContent *tlc =
-        DP_layer_routes_entry_indexes_transient_content(index_count, indexes,
-                                                        puc->tcs);
     DP_transient_layer_content_merge_sublayer_at(tlc, puc->context_id,
                                                  sublayer_index);
+    return tlc;
 }
 
 static void pen_up_layer_content(DP_PenUpContext *puc, DP_DrawContext *dc,
-                                 int sublayer_id, DP_LayerContent *lc)
+                                 int target_sublayer_id, DP_LayerContent *lc)
 {
     DP_LayerPropsList *sub_lpl = DP_layer_content_sub_props_noinc(lc);
+    DP_TransientLayerContent *tlc = NULL;
     int count = DP_layer_props_list_count(sub_lpl);
-    for (int i = 0; i < count; ++i) {
+    int i = 0;
+    while (i < count) {
         DP_LayerProps *sub_lp = DP_layer_props_list_at_noinc(sub_lpl, i);
-        if (DP_layer_props_id(sub_lp) == sublayer_id) {
-            pen_up_merge_sublayer(puc, dc, i);
+        int sublayer_id = DP_layer_props_id(sub_lp);
+        // An id of 0 means to merge all sublayers, so in that case keep going.
+        // Other ids are of individual users, which can only have one sublayer
+        // per layer content, so we can break out in that case.
+        if (target_sublayer_id == 0 && sublayer_id >= 0) {
+            tlc = pen_up_merge_sublayer(puc, dc, tlc, i);
+            --count;
+        }
+        else if (sublayer_id == target_sublayer_id) {
+            pen_up_merge_sublayer(puc, dc, NULL, i);
             break;
+        }
+        else {
+            ++i;
         }
     }
 }
 
 static void pen_up_layers(DP_PenUpContext *puc, DP_DrawContext *dc,
-                          int sublayer_id, DP_LayerList *ll)
+                          int target_sublayer_id, DP_LayerList *ll)
 {
     int count = DP_layer_list_count(ll);
     DP_draw_context_layer_indexes_push(dc);
@@ -1059,12 +1075,12 @@ static void pen_up_layers(DP_PenUpContext *puc, DP_DrawContext *dc,
         DP_LayerListEntry *lle = DP_layer_list_at_noinc(ll, i);
         if (DP_layer_list_entry_is_group(lle)) {
             DP_LayerGroup *lg = DP_layer_list_entry_group_noinc(lle);
-            pen_up_layers(puc, dc, sublayer_id,
+            pen_up_layers(puc, dc, target_sublayer_id,
                           DP_layer_group_children_noinc(lg));
         }
         else {
             DP_LayerContent *lc = DP_layer_list_entry_content_noinc(lle);
-            pen_up_layer_content(puc, dc, sublayer_id, lc);
+            pen_up_layer_content(puc, dc, target_sublayer_id, lc);
         }
     }
     DP_draw_context_layer_indexes_pop(dc);
@@ -1077,9 +1093,10 @@ DP_CanvasState *DP_ops_pen_up(DP_CanvasState *cs, DP_DrawContext *dc,
     // their id to merge. We walk the layer stack and merge them as we encounter
     // them, only creating a new transient canvas state if actually necessary.
     DP_PenUpContext puc = {context_id, cs, NULL};
-    int sublayer_id = DP_uint_to_int(context_id);
+    int target_sublayer_id = DP_uint_to_int(context_id);
     DP_draw_context_layer_indexes_clear(dc);
-    pen_up_layers(&puc, dc, sublayer_id, DP_canvas_state_layers_noinc(cs));
+    pen_up_layers(&puc, dc, target_sublayer_id,
+                  DP_canvas_state_layers_noinc(cs));
     if (puc.tcs) {
         return DP_transient_canvas_state_persist(puc.tcs);
     }

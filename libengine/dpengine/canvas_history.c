@@ -177,6 +177,7 @@ static void dump_history(DP_CanvasHistory *ch)
 #define DUMP_TYPE_LOCAL_MULTIDAB                            5
 #define DUMP_TYPE_RESET                                     6
 #define DUMP_TYPE_SOFT_RESET                                7
+#define DUMP_TYPE_CLEANUP                                   8
 
 #ifdef DRAWDANCE_HISTORY_DUMP
 
@@ -725,6 +726,21 @@ static int append_to_history_inc(DP_CanvasHistory *ch, DP_Message *msg)
 {
     DP_ASSERT(DP_message_type(msg) != DP_MSG_UNDO);
     return append_to_history_noinc(ch, DP_message_incref(msg));
+}
+
+
+void DP_canvas_history_cleanup(DP_CanvasHistory *ch, DP_DrawContext *dc)
+{
+    DP_ASSERT(ch);
+    dump_internal(ch, DUMP_TYPE_CLEANUP);
+    while (ch->fork.queue.used) {
+        DP_Message *msg = peek_fork_entry_message(ch);
+        append_to_history_noinc(ch, msg);
+        shift_fork_entry_nodec(ch);
+    }
+    DP_Message *msg = DP_msg_pen_up_new(0);
+    DP_canvas_history_handle(ch, dc, msg);
+    DP_message_decref(msg);
 }
 
 

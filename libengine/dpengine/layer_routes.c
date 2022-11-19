@@ -464,14 +464,14 @@ DP_layer_routes_entry_transient_content(DP_LayerRoutesEntry *lre,
 
 
 DP_TransientLayerProps *
-DP_layer_routes_entry_transient_props(DP_LayerRoutesEntry *lre,
-                                      DP_TransientCanvasState *tcs)
+DP_layer_routes_entry_indexes_transient_props(int index_count, int *indexes,
+                                              DP_TransientCanvasState *tcs)
 {
-    DP_ASSERT(lre);
+    DP_ASSERT(index_count > 0);
+    DP_ASSERT(indexes);
     DP_ASSERT(tcs);
 
-    int *indexes = lre->indexes;
-    int group_indexes_count = lre->index_count - 1;
+    int group_indexes_count = index_count - 1;
     DP_TransientLayerPropsList *tlpl =
         DP_transient_canvas_state_transient_layer_props(tcs, 0);
 
@@ -484,6 +484,16 @@ DP_layer_routes_entry_transient_props(DP_LayerRoutesEntry *lre,
 
     int last_index = indexes[group_indexes_count];
     return DP_transient_layer_props_list_transient_at_noinc(tlpl, last_index);
+}
+
+DP_TransientLayerProps *
+DP_layer_routes_entry_transient_props(DP_LayerRoutesEntry *lre,
+                                      DP_TransientCanvasState *tcs)
+{
+    DP_ASSERT(lre);
+    DP_ASSERT(tcs);
+    return DP_layer_routes_entry_indexes_transient_props(lre->index_count,
+                                                         lre->indexes, tcs);
 }
 
 

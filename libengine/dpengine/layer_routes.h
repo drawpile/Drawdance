@@ -105,6 +105,10 @@ DP_layer_routes_entry_transient_content(DP_LayerRoutesEntry *lre,
                                         DP_TransientCanvasState *tcs);
 
 DP_TransientLayerProps *
+DP_layer_routes_entry_indexes_transient_props(int index_count, int *indexes,
+                                              DP_TransientCanvasState *tcs);
+
+DP_TransientLayerProps *
 DP_layer_routes_entry_transient_props(DP_LayerRoutesEntry *lre,
                                       DP_TransientCanvasState *tcs);
 

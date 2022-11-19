@@ -403,6 +403,7 @@ DP_TransientTile *DP_transient_tile_new_blank(unsigned int context_id)
     DP_atomic_set(&tt->refcount, 1);
     tt->transient = true;
     tt->context_id = context_id;
+    tt->maybe_blank = true;
     return tt;
 }
 
@@ -494,9 +495,7 @@ void DP_transient_tile_pixel_at_set(DP_TransientTile *tt, int x, int y,
     DP_ASSERT(y >= 0);
     DP_ASSERT(x < DP_TILE_SIZE);
     DP_ASSERT(y < DP_TILE_SIZE);
-    if (pixel.a == 0) {
-        tt->maybe_blank = true;
-    }
+    tt->maybe_blank = pixel.a == 0;
     tt->pixels[y * DP_TILE_SIZE + x] = pixel;
 }
 

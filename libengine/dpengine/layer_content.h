@@ -180,9 +180,12 @@ void DP_transient_layer_content_fill_rect(DP_TransientLayerContent *tlc,
                                           int right, int bottom,
                                           DP_UPixel15 pixel);
 
-void DP_transient_layer_content_put_tile(DP_TransientLayerContent *tlc,
-                                         DP_Tile *tile, int x, int y,
-                                         int repeat);
+void DP_transient_layer_content_tile_set_noinc(DP_TransientLayerContent *tlc,
+                                               DP_Tile *tile, int i);
+
+void DP_transient_layer_content_put_tile_inc(DP_TransientLayerContent *tlc,
+                                             DP_Tile *tile, int x, int y,
+                                             int repeat);
 
 void DP_transient_layer_content_brush_stamp_apply(
     DP_TransientLayerContent *tlc, unsigned int context_id, DP_UPixel15 pixel,
