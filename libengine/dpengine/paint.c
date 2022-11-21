@@ -673,6 +673,7 @@ static DP_UserCursor draw_dabs_mypaint(DP_DrawContext *dc,
     const DP_MyPaintDab *first_dab = DP_mypaint_dab_at(dabs, 0);
     int last_x = params->origin_x + DP_mypaint_dab_x(first_dab);
     int last_y = params->origin_y + DP_mypaint_dab_y(first_dab);
+    // FIXME: size is supposed to be the radius, not the diameter. I think.
     uint16_t last_size = DP_mypaint_dab_size(first_dab);
     uint8_t last_hardness = DP_mypaint_dab_hardness(first_dab);
     uint8_t last_aspect_ratio = DP_mypaint_dab_aspect_ratio(first_dab);
