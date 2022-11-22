@@ -133,9 +133,6 @@ void DP_snapshot_queue_on_save_point(void *user, DP_CanvasState *cs,
         DP_SnapshotQueue *sq = user;
         long long timestamp_ms = sq->timestamp.fn(sq->timestamp.user);
         if (should_make_snapshot(sq, cs, snapshot_requested, timestamp_ms)) {
-            DP_debug("Creating %s snapshot at %lld",
-                     snapshot_requested ? "requested" : "regular",
-                     timestamp_ms);
             DP_Mutex *mutex = sq->mutex;
             DP_MUTEX_MUST_LOCK(mutex);
             make_snapshot(sq, timestamp_ms, cs);
