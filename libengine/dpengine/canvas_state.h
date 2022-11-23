@@ -202,6 +202,8 @@ void DP_transient_canvas_state_background_tile_set_noinc(
 void DP_transient_canvas_state_layer_routes_reindex(
     DP_TransientCanvasState *tcs, DP_DrawContext *dc);
 
+void DP_transient_canvas_state_timeline_cleanup(DP_TransientCanvasState *tcs);
+
 DP_LayerList *
 DP_transient_canvas_state_layers_noinc(DP_TransientCanvasState *tcs);
 

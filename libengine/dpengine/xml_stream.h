@@ -18,7 +18,15 @@ bool DP_xml_stream(size_t size, const char *buffer,
 
 const char *DP_xml_element_name(DP_XmlElement *element);
 
-const char *DP_xml_element_attribute(DP_XmlElement *element, const char *name);
+const char *DP_xml_element_namespace(DP_XmlElement *element);
+
+bool DP_xml_element_name_equals(DP_XmlElement *element,
+                                const char *namespace_or_null,
+                                const char *name);
+
+const char *DP_xml_element_attribute(DP_XmlElement *element,
+                                     const char *namespace_or_null,
+                                     const char *name);
 
 
 #endif

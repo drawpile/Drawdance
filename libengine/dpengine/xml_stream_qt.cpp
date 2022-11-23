@@ -10,7 +10,8 @@ extern "C" {
 
 struct DP_XmlElement {
   public:
-    DP_XmlElement(QXmlStreamReader *xsr) : m_xsr{xsr}, m_name{}, m_attributes{}
+    DP_XmlElement(QXmlStreamReader *xsr)
+        : m_xsr{xsr}, m_name{}, m_namespace_uri{}, m_attributes{}
     {
     }
 
@@ -22,19 +23,34 @@ struct DP_XmlElement {
     const char *name()
     {
         if (m_name.isNull()) {
-            m_name = m_xsr->qualifiedName().toUtf8();
+            m_name = m_xsr->name().toUtf8();
         }
         return m_name.constData();
     }
 
-    const char *attribute(const QString &name)
+    const char *namespace_uri()
+    {
+        if (m_namespace_uri.isNull()) {
+            m_namespace_uri = m_xsr->namespaceUri().toUtf8();
+        }
+        return m_namespace_uri.constData();
+    }
+
+    bool name_equals(const QString &namespace_uri, const QString &name)
+    {
+        return m_xsr->namespaceUri() == namespace_uri && m_xsr->name() == name;
+    }
+
+    const char *attribute(const QString &namespace_uri, const QString &name)
     {
         QXmlStreamAttributes attributes = m_xsr->attributes();
-        if (attributes.hasAttribute(name)) {
-            if (!m_attributes.contains(name)) {
-                m_attributes.insert(name, attributes.value(name).toUtf8());
+        if (attributes.hasAttribute(namespace_uri, name)) {
+            QPair<QString, QString> key{namespace_uri, name};
+            if (!m_attributes.contains(key)) {
+                m_attributes.insert(
+                    key, attributes.value(namespace_uri, name).toUtf8());
             }
-            return m_attributes.value(name).constData();
+            return m_attributes.value(key).constData();
         }
         else {
             return nullptr;
@@ -44,7 +60,8 @@ struct DP_XmlElement {
   private:
     QXmlStreamReader *m_xsr;
     QByteArray m_name;
-    QHash<QString, QByteArray> m_attributes;
+    QByteArray m_namespace_uri;
+    QHash<QPair<QString, QString>, QByteArray> m_attributes;
 };
 
 static bool call_on_start_element(QXmlStreamReader *xsr,
@@ -126,12 +143,35 @@ extern "C" bool DP_xml_stream(size_t size, const char *buffer,
 extern "C" const char *DP_xml_element_name(DP_XmlElement *element)
 {
     DP_ASSERT(element);
-    return element->name();
+    const char *name = element->name();
+    return name ? name : "";
+}
+
+extern "C" const char *DP_xml_element_namespace(DP_XmlElement *element)
+{
+    DP_ASSERT(element);
+    const char *namespace_uri = element->namespace_uri();
+    return namespace_uri ? namespace_uri : "";
+}
+
+extern "C" bool DP_xml_element_name_equals(DP_XmlElement *element,
+                                           const char *namespace_or_null,
+                                           const char *name)
+{
+    DP_ASSERT(element);
+    DP_ASSERT(name);
+    return element->name_equals(
+        namespace_or_null ? QString::fromUtf8(namespace_or_null) : QString{},
+        QString::fromUtf8(name));
 }
 
 extern "C" const char *DP_xml_element_attribute(DP_XmlElement *element,
+                                                const char *namespace_or_null,
                                                 const char *name)
 {
     DP_ASSERT(element);
-    return element->attribute(QString::fromUtf8(name));
+    DP_ASSERT(name);
+    return element->attribute(
+        namespace_or_null ? QString::fromUtf8(namespace_or_null) : QString{},
+        QString::fromUtf8(name));
 }
