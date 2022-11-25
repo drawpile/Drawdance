@@ -10,10 +10,12 @@
 #include "layer_props_list.h"
 #include "layer_routes.h"
 #include "paint.h"
+#include "recorder.h"
 #include "tile.h"
 #include <dpcommon/atomic.h>
 #include <dpcommon/common.h>
 #include <dpcommon/conversions.h>
+#include <dpcommon/output.h>
 #include <dpcommon/queue.h>
 #include <dpcommon/threading.h>
 #include <dpcommon/worker.h>
@@ -29,6 +31,10 @@
 
 #define PREVIEW_SUBLAYER_ID -100
 #define INSPECT_SUBLAYER_ID -200
+
+#define RECORDER_UNCHANGED 0
+#define RECORDER_STARTED   1
+#define RECORDER_STOPPED   2
 
 typedef struct DP_PaintEnginePreview DP_PaintEnginePreview;
 typedef DP_CanvasState *(*DP_PaintEnginePreviewRenderFn)(
@@ -127,6 +133,13 @@ struct DP_PaintEngine {
     DP_AtomicPtr next_preview;
     DP_Thread *paint_thread;
     struct {
+        DP_Recorder *recorder;
+        DP_Semaphore *start_sem;
+        int state_change;
+        DP_RecorderGetTimeMsFn get_time_ms_fn;
+        void *get_time_ms_user;
+    } record;
+    struct {
         DP_Worker *worker;
         DP_Semaphore *tiles_done_sem;
         int tiles_waiting;
@@ -146,6 +159,12 @@ struct DP_PaintEngineRenderJobParams {
     int x, y;
 };
 
+
+static void push_cleanup_message(void *user, DP_Message *msg)
+{
+    DP_PaintEngine *pe = user;
+    DP_message_queue_push_noinc(&pe->remote_queue, msg);
+}
 
 static void free_preview(DP_PaintEnginePreview *preview)
 {
@@ -175,11 +194,16 @@ static void handle_internal(DP_PaintEngine *pe, DP_DrawContext *dc,
         DP_atomic_set(&pe->catchup, DP_msg_internal_catchup_progress(mi));
         break;
     case DP_MSG_INTERNAL_TYPE_CLEANUP:
-        DP_canvas_history_cleanup(pe->ch, dc);
+        DP_MUTEX_MUST_LOCK(pe->queue_mutex);
+        DP_canvas_history_cleanup(pe->ch, dc, push_cleanup_message, pe);
+        DP_MUTEX_MUST_UNLOCK(pe->queue_mutex);
         break;
     case DP_MSG_INTERNAL_TYPE_PREVIEW:
         free_preview(DP_atomic_ptr_xch(&pe->next_preview,
                                        DP_msg_internal_preview_data(mi)));
+        break;
+    case DP_MSG_INTERNAL_TYPE_RECORDER_START:
+        DP_SEMAPHORE_MUST_POST(pe->record.start_sem);
         break;
     default:
         DP_warn("Unhandled internal message type %d", (int)type);
@@ -372,9 +396,10 @@ static void run_paint_engine(void *user)
 {
     DP_PaintEngine *pe = user;
     DP_DrawContext *dc = pe->paint_dc;
+    DP_Semaphore *sem = pe->queue_sem;
     DP_Message **msgs = DP_malloc(sizeof(*msgs) * MAX_MULTIDAB_MESSAGES);
     while (true) {
-        DP_SEMAPHORE_MUST_WAIT(pe->queue_sem);
+        DP_SEMAPHORE_MUST_WAIT(sem);
         if (DP_atomic_get(&pe->running)) {
             handle_message(pe, dc, msgs);
         }
@@ -411,12 +436,11 @@ static void render_job(void *user, int thread_index)
     DP_SEMAPHORE_MUST_POST(pe->render.tiles_done_sem);
 }
 
-
-DP_PaintEngine *
-DP_paint_engine_new_inc(DP_DrawContext *paint_dc, DP_DrawContext *preview_dc,
-                        DP_AclState *acls, DP_CanvasState *cs_or_null,
-                        DP_CanvasHistorySavePointFn save_point_fn,
-                        void *save_point_user)
+DP_PaintEngine *DP_paint_engine_new_inc(
+    DP_DrawContext *paint_dc, DP_DrawContext *preview_dc, DP_AclState *acls,
+    DP_CanvasState *cs_or_null, DP_CanvasHistorySavePointFn save_point_fn,
+    void *save_point_user, DP_RecorderGetTimeMsFn get_time_ms_fn,
+    void *get_time_ms_user)
 {
     int render_thread_count = DP_thread_cpu_count();
     size_t flex_size = DP_max_size(sizeof(DP_PaintEngineLaserBuffer),
@@ -456,6 +480,11 @@ DP_paint_engine_new_inc(DP_DrawContext *paint_dc, DP_DrawContext *preview_dc,
     DP_atomic_set(&pe->catchup, -1);
     DP_atomic_ptr_set(&pe->next_preview, NULL);
     pe->paint_thread = DP_thread_new(run_paint_engine, pe);
+    pe->record.recorder = NULL;
+    pe->record.start_sem = DP_semaphore_new(0);
+    pe->record.state_change = RECORDER_STOPPED;
+    pe->record.get_time_ms_fn = get_time_ms_fn;
+    pe->record.get_time_ms_user = get_time_ms_user;
     pe->render.worker =
         DP_worker_new(1024, sizeof(struct DP_PaintEngineRenderJobParams),
                       render_thread_count, render_job);
@@ -472,6 +501,8 @@ void DP_paint_engine_free_join(DP_PaintEngine *pe)
         DP_worker_free_join(pe->render.worker);
         DP_SEMAPHORE_MUST_POST(pe->queue_sem);
         DP_thread_free_join(pe->paint_thread);
+        DP_recorder_free_join(pe->record.recorder);
+        DP_semaphore_free(pe->record.start_sem);
         DP_mutex_free(pe->queue_mutex);
         DP_semaphore_free(pe->queue_sem);
         free_preview(DP_atomic_ptr_xch(&pe->next_preview, NULL));
@@ -577,6 +608,17 @@ void DP_paint_engine_reveal_censored_set(DP_PaintEngine *pe,
 }
 
 
+void DP_paint_engine_inspect_context_id_set(DP_PaintEngine *pe,
+                                            unsigned int context_id)
+{
+    DP_ASSERT(pe);
+    if (pe->local_view.inspect_context_id != context_id) {
+        pe->local_view.inspect_context_id = context_id;
+        invalidate_local_view(pe);
+    }
+}
+
+
 static int search_hidden_layer_index(DP_PaintEngine *pe, int layer_id)
 {
     int used = pe->local_view.hidden_layers.used;
@@ -626,14 +668,75 @@ void DP_paint_engine_layer_visibility_set(DP_PaintEngine *pe, int layer_id,
     }
 }
 
-void DP_paint_engine_inspect_context_id_set(DP_PaintEngine *pe,
-                                            unsigned int context_id)
+
+bool DP_paint_engine_recorder_start(DP_PaintEngine *pe, DP_RecorderType type,
+                                    const char *path)
+{
+    DP_Output *output = DP_file_output_new_from_path(path);
+    if (!output) {
+        return false;
+    }
+
+    // To get a clean recording, we have to first spin down all queued messages.
+    // We send ourselves a RECORDER_START internal message and then block this
+    // thread (which must be the only thread interacting with the paint engine,
+    // maybe we should verify that somehow) until the paint thread gets to it.
+    DP_MUTEX_MUST_LOCK(pe->queue_mutex);
+    DP_message_queue_push_noinc(&pe->remote_queue,
+                                DP_msg_internal_recorder_start_new(0));
+    DP_SEMAPHORE_MUST_POST(pe->queue_sem);
+    DP_MUTEX_MUST_UNLOCK(pe->queue_mutex);
+    // The paint thread will post to this semaphore when it reaches our message.
+    DP_SEMAPHORE_MUST_WAIT(pe->record.start_sem);
+    DP_ASSERT(pe->remote_queue.used == 0);
+
+    // Now all queued messages have been handled. We can't just take the current
+    // canvas state from the canvas history though, since that would lose undo
+    // history and might contain state from local messages. So instead, we grab
+    // the oldest reachable state and then record the entire history since then.
+    DP_Recorder *r =
+        DP_canvas_history_recorder_new(pe->ch, type, pe->record.get_time_ms_fn,
+                                       pe->record.get_time_ms_user, output);
+    if (r) {
+        if (pe->record.recorder) {
+            DP_warn("Stopping already running recording");
+            DP_paint_engine_recorder_stop(pe);
+        }
+        // When dealing with cleanup after a disconnect, the recorder might
+        // currently be in the process of being fed messages from the local
+        // fork, so we have to take a lock around manipulating it. We re-use
+        // the queue mutex for that, since it's what the cleanup uses too.
+        DP_MUTEX_MUST_LOCK(pe->queue_mutex);
+        pe->record.recorder = r;
+        DP_MUTEX_MUST_UNLOCK(pe->queue_mutex);
+        pe->record.state_change = RECORDER_STARTED;
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+bool DP_paint_engine_recorder_stop(DP_PaintEngine *pe)
+{
+    if (pe->record.recorder) {
+        // Need to take a lock due to cleanup handling, see explanation above.
+        DP_MUTEX_MUST_LOCK(pe->queue_mutex);
+        DP_recorder_free_join(pe->record.recorder);
+        pe->record.recorder = NULL;
+        DP_MUTEX_MUST_UNLOCK(pe->queue_mutex);
+        pe->record.state_change = RECORDER_STOPPED;
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+bool DP_paint_engine_recorder_is_recording(DP_PaintEngine *pe)
 {
     DP_ASSERT(pe);
-    if (pe->local_view.inspect_context_id != context_id) {
-        pe->local_view.inspect_context_id = context_id;
-        invalidate_local_view(pe);
-    }
+    return pe->record.recorder != NULL;
 }
 
 
@@ -645,6 +748,24 @@ static bool is_internal_or_command(DP_MessageType type)
 static DP_PaintEngineMetaBuffer *get_meta_buffer(DP_PaintEngine *pe)
 {
     return (DP_PaintEngineMetaBuffer *)pe->buffers;
+}
+
+static void record_message(DP_PaintEngine *pe, DP_Message *msg,
+                           DP_MessageType type)
+{
+    DP_Recorder *r = pe->record.recorder;
+    if (r) {
+        bool is_reset = type == DP_MSG_INTERNAL
+                     && DP_msg_internal_type(DP_message_internal(msg))
+                            == DP_MSG_INTERNAL_TYPE_RESET;
+        if (is_reset) {
+            DP_paint_engine_recorder_stop(pe);
+        }
+        else if (!DP_recorder_message_push_inc(r, msg)) {
+            DP_warn("Failed to push message to recorder: %s", DP_error());
+            DP_paint_engine_recorder_stop(pe);
+        }
+    }
 }
 
 static void handle_laser_trail(DP_PaintEngine *pe, DP_Message *msg)
@@ -707,6 +828,7 @@ static bool should_push_message_remote(DP_PaintEngine *pe, DP_Message *msg)
     get_meta_buffer(pe)->acl_change_flags |= result;
     if (!(result & DP_ACL_STATE_FILTERED_BIT)) {
         DP_MessageType type = DP_message_type(msg);
+        record_message(pe, msg, type);
         if (is_internal_or_command(type)) {
             return true;
         }
@@ -1111,6 +1233,7 @@ emit_changes(DP_PaintEngine *pe, DP_CanvasState *prev, DP_CanvasState *cs,
 
 void DP_paint_engine_tick(
     DP_PaintEngine *pe, DP_PaintEngineCatchupFn catchup,
+    DP_PaintEngineRecorderStateChanged recorder_state_changed,
     DP_PaintEngineResizedFn resized, DP_CanvasDiffEachPosFn tile_changed,
     DP_PaintEngineLayerPropsChangedFn layer_props_changed,
     DP_PaintEngineAnnotationsChangedFn annotations_changed,
@@ -1127,6 +1250,19 @@ void DP_paint_engine_tick(
     int progress = DP_atomic_xch(&pe->catchup, -1);
     if (progress != -1) {
         catchup(user, progress);
+    }
+
+    switch (pe->record.state_change) {
+    case RECORDER_STARTED:
+        pe->record.state_change = RECORDER_UNCHANGED;
+        recorder_state_changed(user, true);
+        break;
+    case RECORDER_STOPPED:
+        pe->record.state_change = RECORDER_UNCHANGED;
+        recorder_state_changed(user, false);
+        break;
+    default:
+        break;
     }
 
     DP_CanvasState *prev_history_cs = pe->history_cs;

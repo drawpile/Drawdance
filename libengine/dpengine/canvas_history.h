@@ -22,6 +22,7 @@
 #ifndef DPENGINE_CANVAS_HISTORY_H
 #define DPENGINE_CANVAS_HISTORY_H
 #include "canvas_state.h"
+#include "recorder.h"
 #include <dpcommon/common.h>
 
 typedef struct DP_DrawContext DP_DrawContext;
@@ -66,7 +67,10 @@ bool DP_canvas_history_snapshot(DP_CanvasHistory *ch);
 
 // Cleans up after disconnecting from a remote session: the local fork is merged
 // into the mainline history and all sublayers are merged into their parents.
-void DP_canvas_history_cleanup(DP_CanvasHistory *ch, DP_DrawContext *dc);
+// The messages are appended to the remote queue so they can be recorded.
+void DP_canvas_history_cleanup(DP_CanvasHistory *ch, DP_DrawContext *dc,
+                               void (*push_message)(void *, DP_Message *),
+                               void *user);
 
 bool DP_canvas_history_handle(DP_CanvasHistory *ch, DP_DrawContext *dc,
                               DP_Message *msg);
@@ -81,6 +85,14 @@ void DP_canvas_history_handle_multidab_dec(DP_CanvasHistory *ch,
 void DP_canvas_history_handle_local_multidab_dec(DP_CanvasHistory *ch,
                                                  DP_DrawContext *dc, int count,
                                                  DP_Message **msgs);
+
+// May return NULL if something goes wrong. Takes ownership of the output, so no
+// matter the return value, the caller must not free it.
+DP_Recorder *DP_canvas_history_recorder_new(DP_CanvasHistory *ch,
+                                            DP_RecorderType type,
+                                            DP_RecorderGetTimeMsFn get_time_fn,
+                                            void *get_time_user,
+                                            DP_Output *output);
 
 
 #endif

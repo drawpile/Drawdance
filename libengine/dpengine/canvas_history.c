@@ -22,6 +22,7 @@
 #include "canvas_history.h"
 #include "affected_area.h"
 #include "canvas_state.h"
+#include "recorder.h"
 #include <dpcommon/atomic.h>
 #include <dpcommon/conversions.h>
 #include <dpcommon/queue.h>
@@ -744,21 +745,6 @@ static int append_to_history_inc(DP_CanvasHistory *ch, DP_Message *msg)
 }
 
 
-void DP_canvas_history_cleanup(DP_CanvasHistory *ch, DP_DrawContext *dc)
-{
-    DP_ASSERT(ch);
-    dump_internal(ch, DUMP_TYPE_CLEANUP);
-    while (ch->fork.queue.used) {
-        DP_Message *msg = peek_fork_entry_message(ch);
-        append_to_history_noinc(ch, msg);
-        shift_fork_entry_nodec(ch);
-    }
-    DP_Message *msg = DP_msg_pen_up_new(0);
-    DP_canvas_history_handle(ch, dc, msg);
-    DP_message_decref(msg);
-}
-
-
 static int mark_undone_actions_gone(DP_CanvasHistory *ch, int index,
                                     int *out_depth)
 {
@@ -977,6 +963,27 @@ static bool search_and_replay_from(DP_CanvasHistory *ch, DP_DrawContext *dc,
         DP_error_set("Can't find save point at or before %d", target_index);
         return false;
     }
+}
+
+void DP_canvas_history_cleanup(DP_CanvasHistory *ch, DP_DrawContext *dc,
+                               void (*push_message)(void *, DP_Message *),
+                               void *user)
+{
+    DP_ASSERT(ch);
+    DP_ASSERT(push_message);
+    dump_internal(ch, DUMP_TYPE_CLEANUP);
+    if (have_local_fork(ch)) {
+        int target_index = ch->fork.start - ch->offset;
+        while (ch->fork.queue.used) {
+            DP_Message *msg = peek_fork_entry_message(ch);
+            push_message(user, msg);
+            shift_fork_entry_nodec(ch);
+        }
+        if (!search_and_replay_from(ch, dc, target_index)) {
+            DP_warn("Cleanup: %s", DP_error());
+        }
+    }
+    push_message(user, DP_msg_pen_up_new(0));
 }
 
 
@@ -1387,4 +1394,47 @@ void DP_canvas_history_handle_local_multidab_dec(DP_CanvasHistory *ch,
     }
 
     validate_history(ch);
+}
+
+
+static DP_Message *get_recorder_message(void *user, int i)
+{
+    DP_CanvasHistoryEntry *entries = user;
+    return entries[i].msg;
+}
+
+DP_Recorder *DP_canvas_history_recorder_new(DP_CanvasHistory *ch,
+                                            DP_RecorderType type,
+                                            DP_RecorderGetTimeMsFn get_time_fn,
+                                            void *get_time_user,
+                                            DP_Output *output)
+{
+    DP_ASSERT(ch);
+    DP_ASSERT(output);
+
+    int used = ch->used;
+    DP_Recorder *r = NULL;
+    int i;
+    for (i = 0; i < used; ++i) {
+        DP_CanvasHistoryEntry *entry = &ch->entries[i];
+        DP_CanvasState *cs = entry->state;
+        if (cs) {
+            r = DP_recorder_new_inc(type, cs, get_time_fn, get_time_user,
+                                    output);
+            if (r) {
+                if (!is_undo_point_entry(entry)) {
+                    ++i; // This is a command entry, don't duplicate it.
+                }
+                break;
+            }
+            else {
+                return NULL;
+            }
+        }
+    }
+
+    DP_ASSERT(r); // There must be a canvas state somewhere in the history.
+    DP_recorder_message_push_initial_inc(r, used - i, get_recorder_message,
+                                         ch->entries + i);
+    return r;
 }

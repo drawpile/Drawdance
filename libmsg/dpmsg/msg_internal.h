@@ -32,6 +32,7 @@ typedef enum DP_MsgInternalType {
     DP_MSG_INTERNAL_TYPE_CATCHUP,
     DP_MSG_INTERNAL_TYPE_CLEANUP,
     DP_MSG_INTERNAL_TYPE_PREVIEW,
+    DP_MSG_INTERNAL_TYPE_RECORDER_START,
     DP_MSG_INTERNAL_TYPE_COUNT,
 } DP_MsgInternalType;
 
@@ -49,6 +50,8 @@ DP_Message *DP_msg_internal_catchup_new(unsigned int context_id, int progress);
 DP_Message *DP_msg_internal_cleanup_new(unsigned int context_id);
 
 DP_Message *DP_msg_internal_preview_new(unsigned int context_id, void *data);
+
+DP_Message *DP_msg_internal_recorder_start_new(unsigned int context_id);
 
 DP_MsgInternal *DP_msg_internal_cast(DP_Message *msg);
 

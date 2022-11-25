@@ -2,6 +2,7 @@
 #define DPENGINE_PAINT_ENGINE
 #include "canvas_diff.h"
 #include "canvas_history.h"
+#include "recorder.h"
 #include <dpcommon/common.h>
 
 typedef struct DP_AclState DP_AclState;
@@ -25,6 +26,7 @@ typedef void (*DP_PaintEngineMovePointerFn)(void *user, unsigned int context_id,
                                             int x, int y);
 typedef void (*DP_PaintEngineDefaultLayerSetFn)(void *user, int layer_id);
 typedef void (*DP_PaintEngineCatchupFn)(void *user, int progress);
+typedef void (*DP_PaintEngineRecorderStateChanged)(void *user, bool started);
 typedef void (*DP_PaintEngineResizedFn)(void *user, int offset_x, int offset_y,
                                         int prev_width, int prev_height);
 typedef void (*DP_PaintEngineLayerPropsChangedFn)(void *user,
@@ -50,11 +52,11 @@ typedef enum DP_LayerViewMode {
 
 typedef struct DP_PaintEngine DP_PaintEngine;
 
-DP_PaintEngine *
-DP_paint_engine_new_inc(DP_DrawContext *paint_dc, DP_DrawContext *preview_dc,
-                        DP_AclState *acls, DP_CanvasState *cs_or_null,
-                        DP_CanvasHistorySavePointFn save_point_fn,
-                        void *save_point_user);
+DP_PaintEngine *DP_paint_engine_new_inc(
+    DP_DrawContext *paint_dc, DP_DrawContext *preview_dc, DP_AclState *acls,
+    DP_CanvasState *cs_or_null, DP_CanvasHistorySavePointFn save_point_fn,
+    void *save_point_user, DP_RecorderGetTimeMsFn get_time_ms_fn,
+    void *get_time_ms_user);
 
 void DP_paint_engine_free_join(DP_PaintEngine *pe);
 
@@ -84,6 +86,13 @@ void DP_paint_engine_inspect_context_id_set(DP_PaintEngine *pe,
 void DP_paint_engine_layer_visibility_set(DP_PaintEngine *pe, int layer_id,
                                           bool hidden);
 
+bool DP_paint_engine_recorder_start(DP_PaintEngine *pe, DP_RecorderType type,
+                                    const char *path);
+
+bool DP_paint_engine_recorder_stop(DP_PaintEngine *pe);
+
+bool DP_paint_engine_recorder_is_recording(DP_PaintEngine *pe);
+
 // Returns the number of drawing commands actually pushed to the paint engine.
 int DP_paint_engine_handle_inc(
     DP_PaintEngine *pe, bool local, int count, DP_Message **msgs,
@@ -94,6 +103,7 @@ int DP_paint_engine_handle_inc(
 
 void DP_paint_engine_tick(
     DP_PaintEngine *pe, DP_PaintEngineCatchupFn catchup,
+    DP_PaintEngineRecorderStateChanged recorder_state_changed,
     DP_PaintEngineResizedFn resized, DP_CanvasDiffEachPosFn tile_changed,
     DP_PaintEngineLayerPropsChangedFn layer_props_changed,
     DP_PaintEngineAnnotationsChangedFn annotations_changed,

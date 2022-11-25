@@ -48,6 +48,7 @@ set(dpengine_sources
     dpengine/paint.c
     dpengine/paint_engine.c
     dpengine/pixels.c
+    dpengine/recorder.c
     dpengine/save.c
     dpengine/snapshots.c
     dpengine/tile.c
@@ -83,6 +84,7 @@ set(dpengine_headers
     dpengine/paint.h
     dpengine/paint_engine.h
     dpengine/pixels.h
+    dpengine/recorder.h
     dpengine/save.h
     dpengine/snapshots.h
     dpengine/tile.h
@@ -137,9 +139,10 @@ endif()
 add_library(dpengine STATIC "${dpengine_sources}" "${dpengine_headers}")
 set_dp_target_properties(dpengine)
 target_include_directories(dpengine INTERFACE "${CMAKE_CURRENT_LIST_DIR}")
+target_include_directories(dpengine PRIVATE "${CMAKE_BINARY_DIR}/config")
 target_link_libraries(dpengine PUBLIC dpengine_archive dpengine_xml
                                       dpmsg_interface uthash mypaint PNG::PNG
-                                      qgrayraster)
+                                      qgrayraster parson)
 
 if(ENABLE_HISTORY_DUMP)
     target_compile_definitions(dpengine PUBLIC DRAWDANCE_HISTORY_DUMP)
