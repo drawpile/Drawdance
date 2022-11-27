@@ -1356,10 +1356,22 @@ DP_CanvasState *DP_ops_timeline_frame_set(DP_CanvasState *cs, int frame_index,
         return NULL;
     }
 
-    DP_TransientFrame *tf = DP_transient_frame_new_init(layer_id_count);
+    // Filter out invalid layer ids. Rustpile likes to send lots of zeroes.
+    int actual_layer_id_count = 0;
     for (int i = 0; i < layer_id_count; ++i) {
         int layer_id = get_layer_id(user, i);
-        DP_transient_frame_layer_id_set_at(tf, layer_id, i);
+        if (layer_id > 0 && layer_id <= UINT16_MAX) {
+            ++actual_layer_id_count;
+        }
+    }
+
+    DP_TransientFrame *tf = DP_transient_frame_new_init(actual_layer_id_count);
+    int actual_index = 0;
+    for (int i = 0; i < layer_id_count; ++i) {
+        int layer_id = get_layer_id(user, i);
+        if (layer_id > 0 && layer_id <= UINT16_MAX) {
+            DP_transient_frame_layer_id_set_at(tf, layer_id, actual_index++);
+        }
     }
 
     bool replace = frame_index < old_frame_count && !insert;

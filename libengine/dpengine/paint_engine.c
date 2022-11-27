@@ -1193,6 +1193,7 @@ emit_changes(DP_PaintEngine *pe, DP_CanvasState *prev, DP_CanvasState *cs,
              DP_PaintEngineLayerPropsChangedFn layer_props_changed,
              DP_PaintEngineAnnotationsChangedFn annotations_changed,
              DP_PaintEngineDocumentMetadataChangedFn document_metadata_changed,
+             DP_PaintEngineTimelineChangedFn timeline_changed,
              DP_PaintEngineCursorMovedFn cursor_moved, void *user)
 {
     int prev_width = DP_canvas_state_width(prev);
@@ -1222,6 +1223,11 @@ emit_changes(DP_PaintEngine *pe, DP_CanvasState *prev, DP_CanvasState *cs,
     DP_DocumentMetadata *dm = DP_canvas_state_metadata_noinc(cs);
     if (dm != DP_canvas_state_metadata_noinc(prev)) {
         document_metadata_changed(user, dm);
+    }
+
+    DP_Timeline *tl = DP_canvas_state_timeline_noinc(cs);
+    if (tl != DP_canvas_state_timeline_noinc(prev)) {
+        timeline_changed(user, tl);
     }
 
     int cursors_count = ucb->count;
@@ -1292,7 +1298,8 @@ void DP_paint_engine_tick(
         pe->view_cs = next_view_cs;
         emit_changes(pe, prev_view_cs, next_view_cs, ucb, resized, tile_changed,
                      layer_props_changed, annotations_changed,
-                     document_metadata_changed, cursor_moved, user);
+                     document_metadata_changed, timeline_changed, cursor_moved,
+                     user);
         DP_canvas_state_decref(prev_view_cs);
     }
 }
