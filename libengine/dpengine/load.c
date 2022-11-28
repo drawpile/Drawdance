@@ -33,9 +33,11 @@ const DP_LoadFormat *DP_load_supported_formats(void)
 {
     static const char *ora_ext[] = {"ora", NULL};
     static const char *png_ext[] = {"png", NULL};
+    static const char *jpeg_ext[] = {"jpg", "jpeg", NULL};
     static const DP_LoadFormat formats[] = {
         {"OpenRaster", ora_ext},
         {"PNG", png_ext},
+        {"JPEG", jpeg_ext},
         {NULL, NULL},
     };
     return formats;

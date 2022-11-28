@@ -34,6 +34,7 @@ set(dpengine_sources
     dpengine/flood_fill.c
     dpengine/frame.c
     dpengine/image.c
+    dpengine/image_jpeg.c
     dpengine/image_png.c
     dpengine/image_transform.c
     dpengine/layer_content.c
@@ -70,6 +71,7 @@ set(dpengine_headers
     dpengine/flood_fill.h
     dpengine/frame.h
     dpengine/image.h
+    dpengine/image_jpeg.h
     dpengine/image_png.h
     dpengine/image_transform.h
     dpengine/layer_content.h
@@ -142,7 +144,7 @@ target_include_directories(dpengine INTERFACE "${CMAKE_CURRENT_LIST_DIR}")
 target_include_directories(dpengine PRIVATE "${CMAKE_BINARY_DIR}/config")
 target_link_libraries(dpengine PUBLIC dpengine_archive dpengine_xml
                                       dpmsg_interface uthash mypaint PNG::PNG
-                                      qgrayraster parson)
+                                      JPEG::JPEG qgrayraster parson)
 
 if(ENABLE_HISTORY_DUMP)
     target_compile_definitions(dpengine PUBLIC DRAWDANCE_HISTORY_DUMP)

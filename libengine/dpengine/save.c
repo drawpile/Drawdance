@@ -27,9 +27,11 @@ const DP_SaveFormat *DP_save_supported_formats(void)
 {
     static const char *ora_ext[] = {"ora", NULL};
     static const char *png_ext[] = {"png", NULL};
+    static const char *jpeg_ext[] = {"jpg", "jpeg", NULL};
     static const DP_SaveFormat formats[] = {
         {"OpenRaster", ora_ext},
         {"PNG", png_ext},
+        {"JPEG", jpeg_ext},
         {NULL, NULL},
     };
     return formats;
@@ -550,6 +552,17 @@ static DP_SaveResult save_png(DP_Image *img, DP_Output *output)
     }
 }
 
+static DP_SaveResult save_jpeg(DP_Image *img, DP_Output *output)
+{
+    bool ok = DP_image_write_jpeg(img, output);
+    if (ok) {
+        return DP_SAVE_RESULT_SUCCESS;
+    }
+    else {
+        DP_warn("Save JPEG: %s", DP_error());
+        return DP_SAVE_RESULT_WRITE_ERROR;
+    }
+}
 
 static DP_SaveResult save_flat_image(DP_CanvasState *cs, const char *path,
                                      DP_SaveResult (*save_fn)(DP_Image *,
@@ -591,6 +604,10 @@ DP_SaveResult DP_save(DP_CanvasState *cs, DP_DrawContext *dc, const char *path)
     }
     else if (DP_str_equal_lowercase(ext, "png")) {
         return save_flat_image(cs, path, save_png);
+    }
+    else if (DP_str_equal_lowercase(ext, "jpg")
+             || DP_str_equal_lowercase(ext, "jpeg")) {
+        return save_flat_image(cs, path, save_jpeg);
     }
     else {
         return DP_SAVE_RESULT_UNKNOWN_FORMAT;
