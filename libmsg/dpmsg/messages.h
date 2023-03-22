@@ -1346,15 +1346,19 @@ uint16_t DP_msg_annotation_delete_id(const DP_MsgAnnotationDelete *mad);
  * For axis aligned rectangle selections, no bitmap is necessary.
  */
 
+#define DP_MSG_MOVE_REGION_MODE_NEAREST  0
+#define DP_MSG_MOVE_REGION_MODE_BILINEAR 1
+
+const char *DP_msg_move_region_mode_variant_name(unsigned int value);
+
 typedef struct DP_MsgMoveRegion DP_MsgMoveRegion;
 
-DP_Message *
-DP_msg_move_region_new(unsigned int context_id, uint16_t layer, int32_t bx,
-                       int32_t by, int32_t bw, int32_t bh, int32_t x1,
-                       int32_t y1, int32_t x2, int32_t y2, int32_t x3,
-                       int32_t y3, int32_t x4, int32_t y4,
-                       void (*set_mask)(size_t, unsigned char *, void *),
-                       size_t mask_size, void *mask_user);
+DP_Message *DP_msg_move_region_new(
+    unsigned int context_id, uint16_t layer, uint16_t source, int32_t bx,
+    int32_t by, int32_t bw, int32_t bh, int32_t x1, int32_t y1, int32_t x2,
+    int32_t y2, int32_t x3, int32_t y3, int32_t x4, int32_t y4, uint8_t mode,
+    void (*set_mask)(size_t, unsigned char *, void *), size_t mask_size,
+    void *mask_user);
 
 DP_Message *DP_msg_move_region_deserialize(unsigned int context_id,
                                            const unsigned char *buffer,
@@ -1366,6 +1370,8 @@ DP_Message *DP_msg_move_region_parse(unsigned int context_id,
 DP_MsgMoveRegion *DP_msg_move_region_cast(DP_Message *msg);
 
 uint16_t DP_msg_move_region_layer(const DP_MsgMoveRegion *mmr);
+
+uint16_t DP_msg_move_region_source(const DP_MsgMoveRegion *mmr);
 
 int32_t DP_msg_move_region_bx(const DP_MsgMoveRegion *mmr);
 
@@ -1390,6 +1396,8 @@ int32_t DP_msg_move_region_y3(const DP_MsgMoveRegion *mmr);
 int32_t DP_msg_move_region_x4(const DP_MsgMoveRegion *mmr);
 
 int32_t DP_msg_move_region_y4(const DP_MsgMoveRegion *mmr);
+
+uint8_t DP_msg_move_region_mode(const DP_MsgMoveRegion *mmr);
 
 const unsigned char *DP_msg_move_region_mask(const DP_MsgMoveRegion *mmr,
                                              size_t *out_size);
@@ -1705,21 +1713,16 @@ int DP_msg_draw_dabs_mypaint_dabs_count(const DP_MsgDrawDabsMyPaint *mddmp);
  * to support non-rectangular selections.
  *
  * Source and target rects may be (partially) outside the canvas.
- *
- * Note: The MoveRegion command that can also transform the
- * selection is currently not implemented. The same effect can be
- * achieved by performing the transformation clientside then
- * sending the results as PutImages, including one to erase the
- * source.
  */
 
 typedef struct DP_MsgMoveRect DP_MsgMoveRect;
 
-DP_Message *
-DP_msg_move_rect_new(unsigned int context_id, uint16_t layer, int32_t sx,
-                     int32_t sy, int32_t tx, int32_t ty, int32_t w, int32_t h,
-                     void (*set_mask)(size_t, unsigned char *, void *),
-                     size_t mask_size, void *mask_user);
+DP_Message *DP_msg_move_rect_new(unsigned int context_id, uint16_t layer,
+                                 uint16_t source, int32_t sx, int32_t sy,
+                                 int32_t tx, int32_t ty, int32_t w, int32_t h,
+                                 void (*set_mask)(size_t, unsigned char *,
+                                                  void *),
+                                 size_t mask_size, void *mask_user);
 
 DP_Message *DP_msg_move_rect_deserialize(unsigned int context_id,
                                          const unsigned char *buffer,
@@ -1731,6 +1734,8 @@ DP_Message *DP_msg_move_rect_parse(unsigned int context_id,
 DP_MsgMoveRect *DP_msg_move_rect_cast(DP_Message *msg);
 
 uint16_t DP_msg_move_rect_layer(const DP_MsgMoveRect *mmr);
+
+uint16_t DP_msg_move_rect_source(const DP_MsgMoveRect *mmr);
 
 int32_t DP_msg_move_rect_sx(const DP_MsgMoveRect *mmr);
 
