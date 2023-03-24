@@ -149,7 +149,6 @@ endif()
 add_library(dpengine STATIC "${dpengine_sources}" "${dpengine_headers}")
 set_dp_target_properties(dpengine)
 target_include_directories(dpengine INTERFACE "${CMAKE_CURRENT_LIST_DIR}")
-target_include_directories(dpengine PRIVATE "${CMAKE_BINARY_DIR}/config")
 target_link_libraries(dpengine PUBLIC dpengine_archive dpengine_xml
                                       dpmsg_interface uthash mypaint qgrayraster
                                       parson jo_gifx)

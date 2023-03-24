@@ -90,7 +90,8 @@ endif()
 
 add_library(dpcommon STATIC "${dpcommon_sources}" "${dpcommon_headers}")
 set_dp_target_properties(dpcommon)
-target_include_directories(dpcommon INTERFACE "${CMAKE_CURRENT_LIST_DIR}")
+target_include_directories(
+    dpcommon INTERFACE "${CMAKE_CURRENT_LIST_DIR}" "${CMAKE_BINARY_DIR}/config")
 target_link_libraries(dpcommon PUBLIC ZLIB::ZLIB)
 
 if(NOT WIN32)
