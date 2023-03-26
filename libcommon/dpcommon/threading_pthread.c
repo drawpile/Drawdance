@@ -25,9 +25,19 @@
 #include "threading.h"
 #include <errno.h>
 #include <pthread.h>
-#include <semaphore.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef __APPLE__
+#    include <mach/mach_error.h>
+#    include <mach/mach_init.h>
+#    include <mach/semaphore.h>
+#    include <mach/task.h>
+#    include <sys/sysctl.h>
+#    include <sys/types.h>
+#else
+#    include <semaphore.h>
+#endif
 
 
 struct DP_Mutex {
@@ -35,7 +45,11 @@ struct DP_Mutex {
 };
 
 struct DP_Semaphore {
+#ifdef __APPLE__
+    semaphore_t value;
+#else
     sem_t value;
+#endif
 };
 
 struct DP_Thread {
@@ -121,6 +135,18 @@ bool DP_mutex_unlock(DP_Mutex *mutex)
 DP_Semaphore *DP_semaphore_new(unsigned int initial_value)
 {
     DP_Semaphore *sem = DP_malloc(sizeof(*sem));
+#ifdef __APPLE__
+    kern_return_t result = semaphore_create(mach_task_self(), &sem->value,
+                                            SYNC_POLICY_FIFO, initial_value);
+    if (result == KERN_SUCCESS) {
+        return sem;
+    }
+    else {
+        DP_error_set("Can't create semaphore: %s", mach_error_string(result));
+        DP_free(sem);
+        return NULL;
+    }
+#else
     if (sem_init(&sem->value, false, initial_value) == 0) {
         return sem;
     }
@@ -129,34 +155,40 @@ DP_Semaphore *DP_semaphore_new(unsigned int initial_value)
         DP_free(sem);
         return NULL;
     }
+#endif
 }
 
 void DP_semaphore_free(DP_Semaphore *sem)
 {
     if (sem) {
+#ifdef __APPLE__
+        kern_return_t result = semaphore_destroy(mach_task_self(), sem->value);
+        if (result != KERN_SUCCESS) {
+            DP_warn("Error destroying semaphore: %s",
+                    mach_error_string(result));
+        }
+#else
         if (sem_destroy(&sem->value) != 0) {
             DP_warn("Error destroying semaphore: %s", strerror(errno));
         }
+#endif
         DP_free(sem);
-    }
-}
-
-int DP_semaphore_value(DP_Semaphore *sem)
-{
-    DP_ASSERT(sem);
-    int sval;
-    if (sem_getvalue(&sem->value, &sval) == 0) {
-        return sval > 0 ? sval : 0;
-    }
-    else {
-        DP_error_set("Can't get semaphore value: %s", strerror(errno));
-        return -1;
     }
 }
 
 bool DP_semaphore_post(DP_Semaphore *sem)
 {
     DP_ASSERT(sem);
+#ifdef __APPLE__
+    kern_return_t result = semaphore_signal(sem->value);
+    if (result == KERN_SUCCESS) {
+        return true;
+    }
+    else {
+        DP_error_set("Can't post semaphore: %s", mach_error_string(result));
+        return false;
+    }
+#else
     if (sem_post(&sem->value) == 0) {
         return true;
     }
@@ -164,6 +196,7 @@ bool DP_semaphore_post(DP_Semaphore *sem)
         DP_error_set("Can't post semaphore: %s", strerror(errno));
         return false;
     }
+#endif
 }
 
 bool DP_semaphore_post_n(DP_Semaphore *sem, int n)
@@ -171,10 +204,18 @@ bool DP_semaphore_post_n(DP_Semaphore *sem, int n)
     DP_ASSERT(sem);
     DP_ASSERT(n >= 0);
     for (int i = 0; i < n; ++i) {
+#ifdef __APPLE__
+        kern_return_t result = semaphore_signal(sem->value);
+        if (result != KERN_SUCCESS) {
+            DP_error_set("Can't post semaphore: %s", mach_error_string(result));
+            return false;
+        }
+#else
         if (sem_post(&sem->value) != 0) {
             DP_error_set("Can't post semaphore: %s", strerror(errno));
             return false;
         }
+#endif
     }
     return true;
 }
@@ -182,6 +223,16 @@ bool DP_semaphore_post_n(DP_Semaphore *sem, int n)
 DP_SemaphoreResult DP_semaphore_wait(DP_Semaphore *sem)
 {
     DP_ASSERT(sem);
+#ifdef __APPLE__
+    kern_return_t result = semaphore_wait(sem->value);
+    if (result == KERN_SUCCESS) {
+        return true;
+    }
+    else {
+        DP_error_set("Can't wait for semaphore: %s", mach_error_string(result));
+        return false;
+    }
+#else
     if (sem_wait(&sem->value) == 0) {
         return DP_SEMAPHORE_OK;
     }
@@ -195,6 +246,7 @@ DP_SemaphoreResult DP_semaphore_wait(DP_Semaphore *sem)
             return DP_SEMAPHORE_ERROR;
         }
     }
+#endif
 }
 
 int DP_semaphore_wait_n(DP_Semaphore *sem, int n)
@@ -214,6 +266,19 @@ int DP_semaphore_wait_n(DP_Semaphore *sem, int n)
 DP_SemaphoreResult DP_semaphore_try_wait(DP_Semaphore *sem)
 {
     DP_ASSERT(sem);
+#ifdef __APPLE__
+    kern_return_t result = semaphore_wait_noblock(sem->value);
+    switch (result) {
+    case KERN_SUCCESS:
+        return DP_SEMAPHORE_OK;
+    case KERN_OPERATION_TIMED_OUT:
+        return DP_SEMAPHORE_BLOCKED;
+    default:
+        DP_error_set("Can't try wait for semaphore: %s",
+                     mach_error_string(result));
+        return DP_SEMAPHORE_ERROR;
+    }
+#else
     if (sem_trywait(&sem->value)) {
         return DP_SEMAPHORE_OK;
     }
@@ -229,19 +294,28 @@ DP_SemaphoreResult DP_semaphore_try_wait(DP_Semaphore *sem)
             return DP_SEMAPHORE_ERROR;
         }
     }
+#endif
 }
 
 
 DP_ThreadId DP_thread_current_id(void)
 {
-    return pthread_self();
+    return (DP_ThreadId)pthread_self();
 }
 
 int DP_thread_cpu_count(void)
 {
     static int cpus;
     if (cpus == 0) {
-        cpus = DP_max_int(1, DP_long_to_int(sysconf(_SC_NPROCESSORS_ONLN)));
+#ifdef __APPLE__
+        size_t size = sizeof(cpus);
+        sysctlbyname("hw.ncpu", &cpus, &size, NULL, 0);
+#else
+        cpus = DP_long_to_int(sysconf(_SC_NPROCESSORS_ONLN));
+#endif
+        if (cpus < 1) {
+            cpus = 1;
+        }
     }
     return cpus;
 }

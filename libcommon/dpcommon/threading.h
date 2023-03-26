@@ -98,8 +98,6 @@ DP_Semaphore *DP_semaphore_new(unsigned int initial_value);
 
 void DP_semaphore_free(DP_Semaphore *sem);
 
-int DP_semaphore_value(DP_Semaphore *sem);
-
 bool DP_semaphore_post(DP_Semaphore *sem);
 
 bool DP_semaphore_post_n(DP_Semaphore *sem, int n);

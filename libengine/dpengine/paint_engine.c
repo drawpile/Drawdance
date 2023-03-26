@@ -465,7 +465,6 @@ static int shift_more_draw_dabs_messages(DP_PaintEngine *pe, bool local,
 
     if (count > 1) {
         int n = count - 1;
-        DP_ASSERT(DP_semaphore_value(pe->queue_sem) >= n);
         DP_SEMAPHORE_MUST_WAIT_N(pe->queue_sem, n);
     }
 

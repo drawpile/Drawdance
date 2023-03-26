@@ -80,24 +80,6 @@ void DP_semaphore_free(DP_Semaphore *sem)
     CloseHandle(sem);
 }
 
-int DP_semaphore_value(DP_Semaphore *sem)
-{
-    DP_ASSERT(sem);
-
-    // Win32 semaphores do not have an API to easily grab the value.
-    // Only ReleaseSemaphore can return the previous count.
-    // To avoid disturbing threads using the sempahore, it checks if it can
-    // acquire it without waiting, and if it can, immediatly increase back the
-    // sempahore, grabbing the value in the proccess.
-    LONG count = 0;
-    if (WaitForSingleObject(sem, 0L) == WAIT_OBJECT_0) {
-        ReleaseSemaphore(sem, 1, &count);
-        count++;
-    }
-
-    return count;
-}
-
 bool DP_semaphore_post(DP_Semaphore *sem)
 {
     DP_ASSERT(sem);
