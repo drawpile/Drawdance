@@ -82,18 +82,20 @@ add_clang_format_files("${dpcommon_sources}" "${dpcommon_headers}"
     dpcommon/threading_pthread.c dpcommon/threading_qt.cpp
     dpcommon/threading_sdl.c)
 
-if(WIN32)
-    list(APPEND dpcommon_sources dpcommon/threading_win32.c)
-else()
-    list(APPEND dpcommon_sources dpcommon/threading_pthread.c)
-endif()
-
 add_library(dpcommon STATIC "${dpcommon_sources}" "${dpcommon_headers}")
 set_dp_target_properties(dpcommon)
 target_include_directories(dpcommon INTERFACE "${CMAKE_CURRENT_LIST_DIR}")
 target_link_libraries(dpcommon PUBLIC ZLIB::ZLIB)
 
-if(NOT WIN32)
+if(WIN32)
+    target_sources(dpcommon PRIVATE dpcommon/threading_win32.c)
+elseif(APPLE)
+    add_library(dpcommon_qt_threads STATIC dpcommon/threading_qt.cpp)
+    set_dp_target_properties(dpcommon_qt_threads CXX)
+    target_link_libraries(dpcommon_qt_threads PUBLIC "Qt${QT_VERSION}::Core")
+    target_link_libraries(dpcommon PUBLIC dpcommon_qt_threads)
+else()
+    target_sources(dpcommon PRIVATE dpcommon/threading_pthread.c)
     target_link_libraries(dpcommon PUBLIC Threads::Threads)
 endif()
 
