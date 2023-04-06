@@ -43,6 +43,7 @@ set(dpengine_sources
     dpengine/layer_props_list.c
     dpengine/layer_routes.c
     dpengine/load.c
+    dpengine/local_state.c
     dpengine/model_changes.c
     dpengine/ops.c
     dpengine/paint.c
@@ -84,6 +85,7 @@ set(dpengine_headers
     dpengine/layer_props_list.h
     dpengine/layer_routes.h
     dpengine/load.h
+    dpengine/local_state.h
     dpengine/model_changes.h
     dpengine/ops.h
     dpengine/paint.h
