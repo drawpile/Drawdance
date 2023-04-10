@@ -21,7 +21,6 @@
  */
 #include "view_mode.h"
 #include "canvas_state.h"
-#include "frame.h"
 #include "layer_props.h"
 #include "layer_props_list.h"
 #include "timeline.h"
@@ -63,14 +62,10 @@ static DP_ViewModeFilter make_frame_automatic(int layer_id)
 
 static DP_ViewModeFilter build_frame_manual(DP_CanvasState *cs, int frame_index)
 {
-    DP_Timeline *tl = DP_canvas_state_timeline_noinc(cs);
-    int frame_count = DP_timeline_frame_count(tl);
-    if (frame_index >= 0 && frame_index < frame_count) {
-        return make_frame_manual(DP_timeline_frame_at_noinc(tl, frame_index));
-    }
-    else {
-        return make_nothing();
-    }
+    // FIXME
+    (void)cs;
+    (void)frame_index;
+    return make_nothing();
 }
 
 static DP_ViewModeFilter build_frame_automatic(DP_CanvasState *cs,
@@ -154,9 +149,10 @@ static DP_ViewModeFilterResult apply_frame_manual(DP_Frame *f,
     if (is_pass_through_group) {
         return make_result(false, make_frame_manual(f));
     }
-    else if (DP_frame_layer_ids_contain(f, DP_layer_props_id(lp))) {
-        return make_result(false, make_normal());
-    }
+    // FIXME
+    // else if (DP_frame_layer_ids_contain(f, DP_layer_props_id(lp))) {
+    //     return make_result(false, make_normal());
+    // }
     else {
         return make_result(true, make_nothing());
     }

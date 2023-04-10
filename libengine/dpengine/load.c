@@ -24,7 +24,6 @@
 #include "canvas_state.h"
 #include "document_metadata.h"
 #include "draw_context.h"
-#include "frame.h"
 #include "image.h"
 #include "layer_content.h"
 #include "layer_group.h"
@@ -698,27 +697,9 @@ static void ora_handle_frame_end(DP_ReadOraContext *c)
     c->expect = DP_READ_ORA_EXPECT_FRAME;
 }
 
-static int frame_at(DP_ReadOraContext *c, size_t i)
-{
-    return *(int *)DP_queue_at(&c->frames, sizeof(int), i);
-}
-
 static void ora_fill_timeline(DP_ReadOraContext *c)
 {
-    DP_TransientTimeline *ttl =
-        DP_transient_canvas_state_transient_timeline(c->tcs, c->frame_count);
-    size_t i = 0;
-    size_t count = c->frames.used;
-    int frame_index = 0;
-    while (i < count) {
-        int layer_id_count = frame_at(c, i++);
-        DP_TransientFrame *tf = DP_transient_frame_new_init(layer_id_count);
-        for (int j = 0; j < layer_id_count; ++j) {
-            int layer_id = frame_at(c, i++) + 1;
-            DP_transient_frame_layer_id_set_at(tf, layer_id, j);
-        }
-        DP_transient_timeline_insert_transient_noinc(ttl, tf, frame_index++);
-    }
+    // FIXME
     // The timeline might have had invalid or duplicate entries, clean it up.
     DP_transient_canvas_state_timeline_cleanup(c->tcs);
 }

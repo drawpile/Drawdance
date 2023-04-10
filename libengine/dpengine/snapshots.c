@@ -20,7 +20,6 @@
 #include "canvas_history.h"
 #include "canvas_state.h"
 #include "document_metadata.h"
-#include "frame.h"
 #include "layer_content.h"
 #include "layer_group.h"
 #include "layer_list.h"
@@ -453,26 +452,12 @@ static void document_metadata_to_reset_image(struct DP_ResetImageContext *c,
     }
 }
 
-void set_timeline_layers(int count, uint16_t *out, void *user)
-{
-    DP_Frame *f = user;
-    DP_ASSERT(count == DP_frame_layer_id_count(f));
-    for (int i = 0; i < count; ++i) {
-        out[i] = DP_int_to_uint16(DP_frame_layer_id_at(f, i));
-    }
-}
-
 static void timeline_to_reset_image(struct DP_ResetImageContext *c,
                                     DP_Timeline *tl)
 {
-    int frame_count = DP_timeline_frame_count(tl);
-    for (int i = 0; i < frame_count; ++i) {
-        DP_Frame *f = DP_timeline_frame_at_noinc(tl, i);
-        reset_image_push(
-            c, DP_msg_set_timeline_frame_new(c->context_id, DP_int_to_uint16(i),
-                                             true, set_timeline_layers,
-                                             DP_frame_layer_id_count(f), f));
-    }
+    (void)c;
+    (void)tl;
+    // FIXME
 }
 
 static void canvas_state_to_reset_image(struct DP_ResetImageContext *c,

@@ -186,6 +186,9 @@ DP_TransientCanvasState *DP_transient_canvas_state_new_with_layers_noinc(
     DP_CanvasState *cs, DP_TransientLayerList *tll,
     DP_TransientLayerPropsList *tlpl);
 
+DP_TransientCanvasState *DP_transient_canvas_state_new_with_timeline_noinc(
+    DP_CanvasState *cs, DP_TransientTimeline *ttl);
+
 DP_TransientCanvasState *
 DP_transient_canvas_state_incref(DP_TransientCanvasState *cs);
 

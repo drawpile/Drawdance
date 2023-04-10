@@ -25,7 +25,6 @@
 #include "canvas_state.h"
 #include "document_metadata.h"
 #include "draw_context.h"
-#include "frame.h"
 #include "image.h"
 #include "image_png.h"
 #include "layer_content.h"
@@ -97,12 +96,13 @@ static DP_SaveOraLayer *save_ora_context_layer_insert(DP_SaveOraContext *c,
     return sol;
 }
 
-static int save_ora_context_index_get(DP_SaveOraContext *c, int layer_id)
-{
-    DP_SaveOraLayer *sol;
-    HASH_FIND_INT(c->layers, &layer_id, sol);
-    return sol ? sol->index : -1;
-}
+// FIXME
+// static int save_ora_context_index_get(DP_SaveOraContext *c, int layer_id)
+// {
+//     DP_SaveOraLayer *sol;
+//     HASH_FIND_INT(c->layers, &layer_id, sol);
+//     return sol ? sol->index : -1;
+// }
 
 static void save_ora_context_offsets_get(DP_SaveOraContext *c, int layer_id,
                                          int *out_offset_x, int *out_offset_y)
@@ -442,45 +442,17 @@ static void ora_write_annotations_xml(DP_SaveOraContext *c, DP_Output *output,
     }
 }
 
-static void ora_write_frame_xml(DP_SaveOraContext *c, DP_Output *output,
-                                DP_Frame *f)
-{
-    bool have_index = false;
-    int layer_id_count = DP_frame_layer_id_count(f);
-    for (int i = 0; i < layer_id_count; ++i) {
-        int layer_id = DP_frame_layer_id_at(f, i);
-        int index = save_ora_context_index_get(c, layer_id);
-        if (index != -1) {
-            if (have_index) {
-                DP_output_format(output, " %d", index);
-            }
-            else {
-                have_index = true;
-                DP_output_format(output, "<frame>%d", index);
-            }
-        }
-    }
-    if (have_index) {
-        DP_OUTPUT_PRINT_LITERAL(output, "</frame>");
-    }
-    else {
-        DP_OUTPUT_PRINT_LITERAL(output, "<frame/>");
-    }
-}
-
 static void ora_write_timeline_xml(DP_SaveOraContext *c, DP_Output *output,
                                    DP_CanvasState *cs, bool use_timeline)
 {
-    DP_Timeline *tl = DP_canvas_state_timeline_noinc(cs);
-    int frame_count = DP_timeline_frame_count(tl);
+    (void)cs;
+    int frame_count = 0; // FIXME
     if (frame_count != 0) {
         DP_OUTPUT_PRINT_LITERAL(output, "<drawpile:timeline");
         ORA_APPEND_ATTR(c, output, "enabled", "%s",
                         use_timeline ? "true" : "false");
         DP_OUTPUT_PRINT_LITERAL(output, ">");
-        for (int i = 0; i < frame_count; ++i) {
-            ora_write_frame_xml(c, output, DP_timeline_frame_at_noinc(tl, i));
-        }
+        // FIXME
         DP_OUTPUT_PRINT_LITERAL(output, "</drawpile:timeline>");
     }
 }
